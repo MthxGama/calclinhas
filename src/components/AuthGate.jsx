@@ -11,109 +11,124 @@ import {
   KeyRound,
   Check,
   X,
+  ShieldCheck,
 } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
-const AUTH_STORAGE_KEY = 'atelier_adri_auth_session_v1';
-const CREDENTIALS_STORAGE_KEY = 'atelier_adri_credentials_v1';
-
-const DEFAULT_CREDENTIALS = {
-  username: process.env.NEXT_PUBLIC_APP_USER || 'adri',
-  password: process.env.NEXT_PUBLIC_APP_PASSWORD || 'adri123',
-};
+function normalizeEmailFromInput(inputUser) {
+  const clean = String(inputUser || '').trim().toLowerCase();
+  if (!clean) return 'adri@atelierdaadri.com';
+  if (clean.includes('@')) return clean;
+  return `${clean}@atelierdaadri.com`;
+}
 
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [credentials, setCredentials] = useState(DEFAULT_CREDENTIALS);
 
   useEffect(() => {
-    try {
-      const savedCreds = localStorage.getItem(CREDENTIALS_STORAGE_KEY);
-      if (savedCreds) {
-        const parsed = JSON.parse(savedCreds);
-        if (parsed?.username && parsed?.password) {
-          setCredentials(parsed);
-        }
-      }
+    let mounted = true;
 
-      const localSession = localStorage.getItem(AUTH_STORAGE_KEY);
-      const tempSession = sessionStorage.getItem(AUTH_STORAGE_KEY);
-      if (localSession === 'authenticated' || tempSession === 'authenticated') {
-        setIsAuthenticated(true);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsCheckingAuth(false);
-    }
-  }, []);
-
-  function login(inputUser, inputPass, rememberMe = true) {
-    const cleanInputUser = String(inputUser || '').trim().toLowerCase();
-    const cleanExpectedUser = String(credentials.username || '').trim().toLowerCase();
-    const cleanInputPass = String(inputPass || '');
-
-    if (cleanInputUser === cleanExpectedUser && cleanInputPass === credentials.password) {
-      setIsAuthenticated(true);
+    async function checkSession() {
       try {
-        if (rememberMe) {
-          localStorage.setItem(AUTH_STORAGE_KEY, 'authenticated');
-        } else {
-          sessionStorage.setItem(AUTH_STORAGE_KEY, 'authenticated');
-          localStorage.removeItem(AUTH_STORAGE_KEY);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (mounted) {
+          setUser(session?.user || null);
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        if (mounted) setIsCheckingAuth(false);
       }
-      return { success: true };
     }
 
-    return {
-      success: false,
-      error: 'Usuário ou senha incorretos. Verifique e tente novamente.',
+    checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setUser(session?.user || null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
     };
-  }
+  }, []);
 
-  function logout() {
-    setIsAuthenticated(false);
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch (e) {
-      console.error(e);
+  async function login(inputUser, inputPass) {
+    const email = normalizeEmailFromInput(inputUser);
+    const password = String(inputPass || '');
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error || !data?.user) {
+      return {
+        success: false,
+        error: 'Usuário ou senha incorretos. Verifique e tente novamente.',
+      };
     }
+
+    setUser(data.user);
+    return { success: true };
   }
 
-  function updateCredentials(currentPassword, newUsername, newPassword) {
-    if (String(currentPassword || '') !== credentials.password) {
+  async function logout() {
+    await supabase.auth.signOut();
+    setUser(null);
+  }
+
+  async function updateCredentials(currentPassword, newPassword) {
+    if (!user?.email) {
+      return { success: false, error: 'Sessão inválida.' };
+    }
+
+    const cleanPass = String(newPassword || '').trim();
+    if (cleanPass.length < 6) {
+      return {
+        success: false,
+        error: 'A nova senha deve ter pelo menos 6 caracteres.',
+      };
+    }
+
+    // Confirma a senha atual antes de alterar
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: String(currentPassword || ''),
+    });
+
+    if (verifyErr) {
       return {
         success: false,
         error: 'A senha atual informada está incorreta.',
       };
     }
-    const cleanUser = String(newUsername || '').trim();
-    const cleanPass = String(newPassword || '').trim();
-    if (!cleanUser || cleanPass.length < 4) {
+
+    const { error: updateErr } = await supabase.auth.updateUser({
+      password: cleanPass,
+    });
+
+    if (updateErr) {
       return {
         success: false,
-        error: 'Informe um usuário válido e uma nova senha com pelo menos 4 caracteres.',
+        error: updateErr.message || 'Não foi possível alterar a senha.',
       };
     }
 
-    const updated = { username: cleanUser, password: cleanPass };
-    setCredentials(updated);
-    try {
-      localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
     return { success: true };
   }
 
   return {
-    isAuthenticated,
+    user,
+    isAuthenticated: Boolean(user),
     isCheckingAuth,
-    credentials,
     login,
     logout,
     updateCredentials,
@@ -124,15 +139,20 @@ export function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const result = onLogin(username, password, rememberMe);
-    if (!result.success) {
-      setError(result.error);
+    setLoading(true);
+    try {
+      const result = await onLogin(username, password);
+      if (!result.success) {
+        setError(result.error);
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -145,7 +165,7 @@ export function LoginScreen({ onLogin }) {
           </div>
           <h1 className="auth-title">Atelier da Adri</h1>
           <p className="auth-subtitle">
-            Acesso restrito — Digite seu login e senha para entrar no sistema
+            Acesso protegido na nuvem — Digite seu login e senha para entrar
           </p>
         </div>
 
@@ -177,7 +197,7 @@ export function LoginScreen({ onLogin }) {
                 autoComplete="username"
                 className="input"
                 style={{ paddingLeft: '2.35rem' }}
-                placeholder="Digite seu usuário..."
+                placeholder="Ex: adri"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -233,48 +253,44 @@ export function LoginScreen({ onLogin }) {
             </div>
           </div>
 
-          <label
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            disabled={loading}
+          >
+            <LogIn size={18} />
+            {loading ? 'Autenticando...' : 'Entrar no Atelier da Adri'}
+          </button>
+
+          <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.85rem',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              userSelect: 'none',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              fontSize: '0.75rem',
+              color: 'var(--secondary)',
+              marginTop: '0.2rem',
             }}
           >
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
-            />
-            Manter conectada neste aparelho
-          </label>
-
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            <LogIn size={18} /> Entrar no Atelier da Adri
-          </button>
+            <ShieldCheck size={14} /> Dados protegidos e sincronizados no Supabase
+          </div>
         </form>
       </div>
     </div>
   );
 }
 
-export function ChangePasswordModal({
-  currentUsername,
-  onClose,
-  onSaveCredentials,
-}) {
+export function ChangePasswordModal({ onClose, onSaveCredentials }) {
   const [currentPassword, setCurrentPassword] = useState('');
-  const [newUsername, setNewUsername] = useState(currentUsername || 'adri');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     if (newPassword !== confirmPassword) {
@@ -282,16 +298,21 @@ export function ChangePasswordModal({
       return;
     }
 
-    const res = onSaveCredentials(currentPassword, newUsername, newPassword);
-    if (!res.success) {
-      setError(res.error);
-      return;
-    }
+    setLoading(true);
+    try {
+      const res = await onSaveCredentials(currentPassword, newPassword);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
 
-    setSuccess(true);
-    setTimeout(() => {
-      onClose();
-    }, 1200);
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 1200);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -300,7 +321,7 @@ export function ChangePasswordModal({
         <div className="panel-header" style={{ marginBottom: '1rem' }}>
           <div className="panel-title">
             <KeyRound size={20} color="var(--primary)" />
-            Alterar Login e Senha
+            Alterar Senha de Acesso
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
             <X size={16} />
@@ -320,7 +341,7 @@ export function ChangePasswordModal({
                 fontWeight: 600,
               }}
             >
-              Login e senha atualizados com sucesso!
+              Senha atualizada com sucesso no banco de dados!
             </div>
           )}
 
@@ -338,19 +359,6 @@ export function ChangePasswordModal({
             />
           </div>
 
-          <div className="field-group">
-            <label className="field-label">
-              <span>Novo Login / Usuário *</span>
-            </label>
-            <input
-              type="text"
-              className="input"
-              value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              required
-            />
-          </div>
-
           <div className="form-row-2">
             <div className="field-group">
               <label className="field-label">
@@ -359,7 +367,7 @@ export function ChangePasswordModal({
               <input
                 type="password"
                 className="input"
-                placeholder="Mínimo 4 caracteres"
+                placeholder="Mínimo 6 caracteres"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -385,8 +393,8 @@ export function ChangePasswordModal({
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancelar
             </button>
-            <button type="submit" className="btn btn-primary">
-              <Check size={17} /> Salvar Nova Senha
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              <Check size={17} /> {loading ? 'Salvando...' : 'Salvar Nova Senha'}
             </button>
           </div>
         </form>
