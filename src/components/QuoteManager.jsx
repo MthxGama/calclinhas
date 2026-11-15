@@ -158,6 +158,8 @@ export default function QuoteManager({
       .join('\n\n');
 
     const partes = [
+      `🧶 *ATELIER DA ADRI — ORÇAMENTO*`,
+      ``,
       saudacao,
       `Aqui está o seu orçamento personalizado de crochê feito à mão:`,
       ``,

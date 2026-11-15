@@ -1,13 +1,13 @@
 import '../index.css';
 
 export const metadata = {
-  title: 'Ateliê Crochê & Linhas — Gestão e Precificação',
+  title: 'Atelier da Adri — Gestão de Crochê e Precificação',
   description:
-    'Sistema completo para cadastro de rolos de linha, produtos de crochê, cálculo de peso de linhas e valor da hora de trabalho.',
+    'Atelier da Adri: Sistema completo para cadastro de rolos de linha, peças de crochê, controle de estoque, valor da hora e orçamentos.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'CalcLinhas',
+    title: 'Atelier da Adri',
   },
 };
 

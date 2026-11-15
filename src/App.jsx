@@ -172,7 +172,7 @@ export default function App() {
               <Sparkles size={20} />
             </div>
             <div>
-              <div className="brand-title">Ateliê CalcLinhas</div>
+              <div className="brand-title">Atelier da Adri</div>
               <div className="brand-subtitle">
                 Gestão de Linhas, Peças, Estoque, Horas e Orçamentos
               </div>
