@@ -157,14 +157,62 @@ export function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-logo">
+    <div
+      className="auth-page"
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.25rem',
+        background: 'radial-gradient(circle at top, #F9E5DD 0%, #FDFBF7 65%)',
+      }}
+    >
+      <div
+        className="auth-card"
+        style={{
+          width: '100%',
+          maxWidth: '410px',
+          background: '#FFFFFF',
+          border: '1px solid #D5C7B8',
+          borderRadius: '20px',
+          padding: '2rem 1.65rem',
+          boxShadow: '0 8px 24px rgba(42, 36, 33, 0.07)',
+          margin: '0 auto',
+        }}
+      >
+        <div
+          className="auth-header"
+          style={{ textAlign: 'center', marginBottom: '1.5rem' }}
+        >
+          <div
+            className="auth-logo"
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #C85A32, #E07A5F)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 0.85rem',
+              boxShadow: '0 6px 16px rgba(200, 90, 50, 0.28)',
+            }}
+          >
             <Sparkles size={28} />
           </div>
-          <h1 className="auth-title">Atelier da Adri</h1>
-          <p className="auth-subtitle">
+          <h1
+            className="auth-title"
+            style={{ fontSize: '1.45rem', fontWeight: 700, color: '#2A2421' }}
+          >
+            Atelier da Adri
+          </h1>
+          <p
+            className="auth-subtitle"
+            style={{ fontSize: '0.85rem', color: '#6E6259', marginTop: '0.25rem' }}
+          >
             Acesso protegido na nuvem — Digite seu login e senha para entrar
           </p>
         </div>
