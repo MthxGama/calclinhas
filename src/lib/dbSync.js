@@ -280,39 +280,92 @@ export async function syncLaborSettings(userId, laborConfig) {
 }
 
 /**
- * Redimensiona/comprime a foto no navegador (para ficar leve no celular) e envia ao Supabase Storage
+ * Redimensiona/comprime a foto no navegador (usando createImageBitmap / ObjectURL para suportar
+ * fotos pesadas de câmeras Android/iPhone sem estourar memória) e envia ao Supabase Storage
  */
 export async function compressAndUploadPhoto(file) {
-  const compressedBlob = await compressImageFile(file, 1000, 0.82);
+  let blobToUpload = file;
+  let contentType = file.type || 'image/jpeg';
+  let ext = 'jpg';
+
+  try {
+    const compressed = await compressImageFile(file, 960, 0.8);
+    if (compressed && compressed.size > 0) {
+      blobToUpload = compressed;
+      contentType = 'image/jpeg';
+      ext = 'jpg';
+    }
+  } catch (compressErr) {
+    console.warn('Usando arquivo original sem compressão via canvas:', compressErr);
+    if (file.name && file.name.includes('.')) {
+      ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+    }
+  }
+
   const fileName = `peca-${Date.now()}-${Math.random()
     .toString(36)
-    .slice(2, 8)}.jpg`;
+    .slice(2, 8)}.${ext}`;
 
   const { error } = await supabase.storage
     .from('product-photos')
-    .upload(fileName, compressedBlob, {
-      contentType: 'image/jpeg',
+    .upload(fileName, blobToUpload, {
+      contentType,
       upsert: true,
     });
 
-  if (error) {
-    // Fallback para Data URL caso haja restrição de rede temporária
-    return await blobToDataURL(compressedBlob);
+  if (!error) {
+    const { data: pubData } = supabase.storage
+      .from('product-photos')
+      .getPublicUrl(fileName);
+
+    if (pubData?.publicUrl) {
+      return pubData.publicUrl;
+    }
+  } else {
+    console.warn('Erro no upload para Storage, usando fallback em base64:', error);
   }
 
-  const { data: pubData } = supabase.storage
-    .from('product-photos')
-    .getPublicUrl(fileName);
-
-  return pubData?.publicUrl || (await blobToDataURL(compressedBlob));
+  // Fallback caso o Storage falhe: retorna Data URL comprimida
+  return await blobToDataURL(blobToUpload);
 }
 
-function compressImageFile(file, maxDimension = 1000, quality = 0.82) {
+async function compressImageFile(file, maxDimension = 960, quality = 0.8) {
+  // 1. Tenta decodificar via createImageBitmap (ideal para celulares Android/iOS com fotos de alta resolução)
+  if (typeof window !== 'undefined' && typeof window.createImageBitmap === 'function') {
+    try {
+      const bitmap = await window.createImageBitmap(file);
+      let { width, height } = bitmap;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      if (typeof bitmap.close === 'function') bitmap.close();
+
+      const blob = await new Promise((res) =>
+        canvas.toBlob((b) => res(b), 'image/jpeg', quality)
+      );
+      if (blob) return blob;
+    } catch (bitmapErr) {
+      console.warn('Fallback de createImageBitmap para ObjectURL:', bitmapErr);
+    }
+  }
+
+  // 2. Fallback via URL.createObjectURL (muito mais leve na memória do celular do que FileReader.readAsDataURL)
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
         let { width, height } = img;
         if (width > maxDimension || height > maxDimension) {
           if (width > height) {
@@ -328,20 +381,25 @@ function compressImageFile(file, maxDimension = 1000, quality = 0.82) {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(objectUrl);
         canvas.toBlob(
           (blob) => {
             if (blob) resolve(blob);
-            else reject(new Error('Falha ao comprimir imagem'));
+            else reject(new Error('Falha ao converter canvas para Blob'));
           },
           'image/jpeg',
           quality
         );
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+    img.src = objectUrl;
   });
 }
 
