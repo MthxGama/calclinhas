@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { fetchPublicCatalogData } from '../lib/dbSync';
 import { calculateProductPricing, formatCurrency } from '../utils/calculations';
+import SmartImage from './SmartImage';
 
 function getCleanWhatsAppNumber(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
@@ -354,7 +355,7 @@ export default function PublicCatalog({ onOpenAdmin }) {
                     }}
                   >
                     {coverPhoto ? (
-                      <img
+                      <SmartImage
                         src={coverPhoto}
                         alt={prod.nome}
                         className="catalog-card-image"
@@ -507,7 +508,7 @@ export default function PublicCatalog({ onOpenAdmin }) {
             {/* Galeria de Fotos */}
             {Array.isArray(activeProduct.fotos) && activeProduct.fotos.length > 0 && (
               <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <img
+                <SmartImage
                   src={activeProduct.fotos[activePhotoIndex] || activeProduct.fotos[0]}
                   alt={activeProduct.nome}
                   style={{

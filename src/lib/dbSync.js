@@ -280,24 +280,48 @@ export async function syncLaborSettings(userId, laborConfig) {
 }
 
 /**
- * Redimensiona/comprime a foto no navegador (usando createImageBitmap / ObjectURL para suportar
- * fotos pesadas de câmeras Android/iPhone sem estourar memória) e envia ao Supabase Storage
+ * Redimensiona/comprime a foto no navegador (incluindo conversão automática de .HEIC/.HEIF para .JPG)
+ * e envia ao Supabase Storage
  */
 export async function compressAndUploadPhoto(file) {
-  let blobToUpload = file;
-  let contentType = file.type || 'image/jpeg';
+  let workingFile = file;
+  const fileNameLower = (file.name || '').toLowerCase();
+  const isHeic =
+    fileNameLower.endsWith('.heic') ||
+    fileNameLower.endsWith('.heif') ||
+    file.type === 'image/heic' ||
+    file.type === 'image/heif';
+
+  // Se a foto veio em formato HEIC/HEIF (padrão de câmeras iPhone e alguns Samsung/Android), converte para JPEG
+  if (isHeic && typeof window !== 'undefined') {
+    try {
+      const heic2anyModule = await import('heic2any');
+      const heic2any = heic2anyModule.default || heic2anyModule;
+      const converted = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.85,
+      });
+      workingFile = Array.isArray(converted) ? converted[0] : converted;
+    } catch (heicErr) {
+      console.warn('Falha ao converter HEIC via heic2any:', heicErr);
+    }
+  }
+
+  let blobToUpload = workingFile;
+  let contentType = workingFile.type || 'image/jpeg';
   let ext = 'jpg';
 
   try {
-    const compressed = await compressImageFile(file, 960, 0.8);
+    const compressed = await compressImageFile(workingFile, 960, 0.82);
     if (compressed && compressed.size > 0) {
       blobToUpload = compressed;
       contentType = 'image/jpeg';
       ext = 'jpg';
     }
   } catch (compressErr) {
-    console.warn('Usando arquivo original sem compressão via canvas:', compressErr);
-    if (file.name && file.name.includes('.')) {
+    console.warn('Usando arquivo sem compressão adicional via canvas:', compressErr);
+    if (!isHeic && file.name && file.name.includes('.')) {
       ext = file.name.split('.').pop().toLowerCase() || 'jpg';
     }
   }

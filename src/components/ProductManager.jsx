@@ -27,6 +27,7 @@ import {
   formatNumber,
 } from '../utils/calculations';
 import { compressAndUploadPhoto } from '../lib/dbSync';
+import SmartImage from './SmartImage';
 
 export default function ProductManager({
   products,
@@ -451,7 +452,7 @@ export default function ProductManager({
                       border: '2px solid var(--border-strong)',
                     }}
                   >
-                    <img
+                    <SmartImage
                       src={url}
                       alt={`Foto ${idx + 1}`}
                       style={{
@@ -1054,7 +1055,7 @@ export default function ProductManager({
                   >
                     <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center' }}>
                       {coverPhoto ? (
-                        <img
+                        <SmartImage
                           src={coverPhoto}
                           alt={prod.nome}
                           style={{
