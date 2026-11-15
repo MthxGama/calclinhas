@@ -13,12 +13,18 @@ import {
   LogOut,
   Cloud,
   RefreshCw,
+  Store,
+  Phone,
+  Check,
+  X,
+  Share2,
 } from 'lucide-react';
 import YarnManager from './components/YarnManager';
 import ProductManager from './components/ProductManager';
 import StockManager from './components/StockManager';
 import LaborCalculator from './components/LaborCalculator';
 import QuoteManager from './components/QuoteManager';
+import PublicCatalog from './components/PublicCatalog';
 import {
   useAuth,
   LoginScreen,
@@ -48,7 +54,20 @@ const STORAGE_KEYS = {
   STOCK_HISTORY: 'calclinhas_stock_history_v2',
 };
 
-export default function App() {
+function formatPhoneBR(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+export default function App({ initialEnvironment = 'catalog' }) {
+  const [environment, setEnvironment] = useState(initialEnvironment); // 'catalog' | 'admin'
+
   const {
     user,
     isAuthenticated,
@@ -58,7 +77,7 @@ export default function App() {
     updateCredentials,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('yarns');
+  const [activeTab, setActiveTab] = useState('products');
   const [yarns, setYarns] = useState(INITIAL_YARNS);
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [laborConfig, setLaborConfig] = useState(INITIAL_LABOR_CONFIG);
@@ -67,10 +86,12 @@ export default function App() {
   const [isCloudReady, setIsCloudReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showCatalogSettingsModal, setShowCatalogSettingsModal] = useState(false);
+  const [copiedCatalogLink, setCopiedCatalogLink] = useState(false);
 
   const skipNextSyncRef = useRef(true);
 
-  // Carrega os dados do Supabase assim que a usuária faz login (e migra dados locais se o banco estiver vazio)
+  // Carrega os dados do Supabase assim que a usuária faz login no Admin
   useEffect(() => {
     if (!user?.id) {
       setIsCloudReady(false);
@@ -85,7 +106,6 @@ export default function App() {
         const cloudData = await fetchAllUserData(user.id);
         if (!active) return;
 
-        // Verifica se o banco na nuvem ainda está vazio mas há registros locais neste navegador para migrar
         const isCloudEmpty =
           cloudData.yarns.length === 0 &&
           cloudData.products.length === 0 &&
@@ -191,7 +211,7 @@ export default function App() {
     );
   }, [products, isCloudReady, user?.id]);
 
-  // Sincroniza Valor da Hora com Supabase + Cache Local
+  // Sincroniza Valor da Hora e Configurações da Vitrine com Supabase + Cache Local
   useEffect(() => {
     if (!isCloudReady || !user?.id || skipNextSyncRef.current) return;
     localStorage.setItem(STORAGE_KEYS.LABOR, JSON.stringify(laborConfig));
@@ -272,17 +292,52 @@ export default function App() {
     }
   }
 
+  function handleShareCatalogLink() {
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    if (!origin) return;
+    navigator.clipboard.writeText(origin);
+    setCopiedCatalogLink(true);
+    setTimeout(() => setCopiedCatalogLink(false), 2500);
+  }
+
+  // AMBIENTE 1: CATÁLOGO VIRTUAL PÚBLICO PARA AS CLIENTES
+  if (environment === 'catalog') {
+    return <PublicCatalog onOpenAdmin={() => setEnvironment('admin')} />;
+  }
+
+  // AMBIENTE 2: PAINEL ADMINISTRATIVO / BACK-OFFICE DA ADRI
   if (isCheckingAuth) {
     return null;
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={login} />;
+    return (
+      <div>
+        <div
+          style={{
+            position: 'fixed',
+            top: '12px',
+            left: '12px',
+            zIndex: 50,
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => setEnvironment('catalog')}
+          >
+            <Store size={15} /> Voltar para o Catálogo Virtual
+          </button>
+        </div>
+        <LoginScreen onLogin={login} />
+      </div>
+    );
   }
 
   return (
     <div className="app-shell">
-      {/* Cabeçalho Principal */}
+      {/* Cabeçalho Principal do Painel Administrativo */}
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
@@ -290,8 +345,8 @@ export default function App() {
               <Sparkles size={20} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                <div className="brand-title">Atelier da Adri</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <div className="brand-title">Atelier da Adri (Admin)</div>
                 <span
                   className="tag"
                   style={{
@@ -315,7 +370,7 @@ export default function App() {
                 </span>
               </div>
               <div className="brand-subtitle">
-                Gestão de Linhas, Peças, Estoque, Horas e Orçamentos
+                Painel de Gestão de Linhas, Peças, Estoque e Orçamentos
               </div>
             </div>
           </div>
@@ -337,7 +392,7 @@ export default function App() {
               onClick={() => setActiveTab('products')}
             >
               <ShoppingBag size={16} />
-              2. Peças
+              2. Peças & Fotos
               <span className="badge-count">{products.length}</span>
             </button>
 
@@ -371,15 +426,40 @@ export default function App() {
             </button>
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              className="hourly-pill"
-              onClick={() => setActiveTab('labor')}
-              title="Clique para ajustar quanto vale a sua hora"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setEnvironment('catalog')}
+              title="Ver como as clientes enxergam o Catálogo Virtual"
             >
-              <Clock size={14} />
-              Hora: {formatCurrency(laborConfig.valorHoraPadrao)}/h
+              <Store size={15} /> Ver Catálogo
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={handleShareCatalogLink}
+              title="Copiar link do Catálogo Virtual para enviar às clientes"
+            >
+              {copiedCatalogLink ? (
+                <>
+                  <Check size={14} color="var(--secondary)" /> Link Copiado!
+                </>
+              ) : (
+                <>
+                  <Share2 size={14} /> Link
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowCatalogSettingsModal(true)}
+              title="Configurar WhatsApp que recebe os pedidos do Catálogo"
+            >
+              <Phone size={14} /> WhatsApp
             </button>
 
             <button
@@ -422,7 +502,80 @@ export default function App() {
         />
       )}
 
-      {/* Conteúdo Principal */}
+      {/* Modal para Configurar WhatsApp e Descrição do Catálogo Virtual */}
+      {showCatalogSettingsModal && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowCatalogSettingsModal(false)}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="panel-header" style={{ marginBottom: '1rem' }}>
+              <div className="panel-title">
+                <Store size={20} color="var(--primary)" />
+                Configurações do Catálogo Virtual
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowCatalogSettingsModal(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="form-stack">
+              <div className="field-group">
+                <label className="field-label">
+                  <span>Seu WhatsApp (para receber pedidos do Catálogo) *</span>
+                </label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  className="input"
+                  placeholder="Ex: (11) 99999-9999"
+                  value={laborConfig.whatsappAtelier || ''}
+                  onChange={(e) =>
+                    setLaborConfig({
+                      ...laborConfig,
+                      whatsappAtelier: formatPhoneBR(e.target.value),
+                    })
+                  }
+                />
+                <span className="field-hint">
+                  Quando a cliente clicar em &ldquo;Pedir pelo WhatsApp&rdquo; no catálogo, a mensagem irá para este número.
+                </span>
+              </div>
+
+              <div className="field-group">
+                <label className="field-label">
+                  <span>Frase de Apresentação no Topo do Catálogo</span>
+                </label>
+                <textarea
+                  rows={3}
+                  className="textarea"
+                  value={laborConfig.bioAtelier || ''}
+                  onChange={(e) =>
+                    setLaborConfig({
+                      ...laborConfig,
+                      bioAtelier: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowCatalogSettingsModal(false)}
+              >
+                <Check size={17} /> Salvar Configurações da Vitrine
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conteúdo Principal do Admin */}
       <main className="main-container">
         {/* Resumo Rápido no Topo */}
         <section className="kpi-grid">

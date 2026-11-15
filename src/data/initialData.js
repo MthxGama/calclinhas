@@ -58,4 +58,7 @@ export const INITIAL_LABOR_CONFIG = {
   diasPorSemana: 5,
   horasPorDia: 8,
   margemLucroPadrao: 0,
+  whatsappAtelier: '',
+  bioAtelier:
+    'Peças em crochê feitas à mão com amor e dedicação para decorar e aquecer o seu lar.',
 };

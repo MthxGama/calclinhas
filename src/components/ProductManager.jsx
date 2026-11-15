@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus,
   Trash2,
@@ -14,6 +14,10 @@ import {
   Check,
   X,
   Sparkles,
+  Camera,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { PRODUCT_TYPES, PRESET_COLORS } from '../data/initialData';
 import {
@@ -22,6 +26,7 @@ import {
   formatCurrency,
   formatNumber,
 } from '../utils/calculations';
+import { compressAndUploadPhoto } from '../lib/dbSync';
 
 export default function ProductManager({
   products,
@@ -31,6 +36,8 @@ export default function ProductManager({
   onNavigateToYarns,
   onNavigateToLabor,
 }) {
+  const fileInputRef = useRef(null);
+
   const yarnsMap = useMemo(() => {
     const map = {};
     yarns.forEach((y) => {
@@ -55,6 +62,8 @@ export default function ProductManager({
     margemLucro: laborConfig.margemLucroPadrao || 0,
     estoqueAtual: 1,
     estoqueMinimo: 0,
+    fotos: [],
+    visivelCatalogo: true,
     observacoes: '',
   });
 
@@ -63,6 +72,7 @@ export default function ProductManager({
   const [colorInput, setColorInput] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   // Se o usuário acabou de cadastrar a primeira linha, pré-seleciona ela no formulário vazio
   useEffect(() => {
@@ -83,6 +93,39 @@ export default function ProductManager({
   const effectivePesoProduto = form.autoSyncPeso
     ? livePricing.pesoTotalLinhas
     : Number(form.pesoTotal) || 0;
+
+  async function handleFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setUploadingPhotos(true);
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const url = await compressAndUploadPhoto(file);
+        if (url) uploadedUrls.push(url);
+      }
+      setForm((prev) => ({
+        ...prev,
+        fotos: [...(prev.fotos || []), ...uploadedUrls],
+      }));
+    } catch (err) {
+      console.error(err);
+      alert('Não foi possível processar uma das fotos selecionadas.');
+    } finally {
+      setUploadingPhotos(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleRemovePhoto(indexToRemove) {
+    setForm((prev) => ({
+      ...prev,
+      fotos: (prev.fotos || []).filter((_, idx) => idx !== indexToRemove),
+    }));
+  }
 
   function handleAddColor(colorName) {
     const trimmed = (colorName || colorInput).trim();
@@ -183,6 +226,10 @@ export default function ProductManager({
       margemLucro: Number(form.margemLucro) || 0,
       estoqueAtual: Math.max(0, Number(form.estoqueAtual) || 0),
       estoqueMinimo: Math.max(0, Number(form.estoqueMinimo) || 0),
+      fotos: Array.isArray(form.fotos) ? form.fotos : [],
+      visivelCatalogo:
+        form.visivelCatalogo === undefined ? true : Boolean(form.visivelCatalogo),
+      precoCatalogo: Number(livePricing.valorFinalSugerido.toFixed(2)),
       observacoes: form.observacoes.trim(),
       criadoEm: new Date().toISOString().slice(0, 10),
     };
@@ -216,9 +263,21 @@ export default function ProductManager({
       margemLucro: prod.margemLucro || 0,
       estoqueAtual: prod.estoqueAtual ?? 0,
       estoqueMinimo: prod.estoqueMinimo ?? 0,
+      fotos: Array.isArray(prod.fotos) ? prod.fotos : [],
+      visivelCatalogo:
+        prod.visivelCatalogo === undefined ? true : Boolean(prod.visivelCatalogo),
       observacoes: prod.observacoes || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleToggleCatalogVisibility(prod) {
+    const nextVal = !(prod.visivelCatalogo ?? true);
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === prod.id ? { ...p, visivelCatalogo: nextVal } : p
+      )
+    );
   }
 
   function handleDelete(id) {
@@ -279,16 +338,16 @@ export default function ProductManager({
 
   return (
     <div className="workspace-grid-wide">
-      {/* Coluna Esquerda: Cadastro do Produto e Cálculo Automático */}
+      {/* Coluna Esquerda: Cadastro do Produto, Fotos e Cálculo Automático */}
       <div className="panel">
         <div className="panel-header">
           <div>
             <h2 className="panel-title">
               <ShoppingBag size={20} color="var(--primary)" />
-              {editingId ? 'Editar Peça de Crochê' : 'Cadastrar Peça & Calcular Valor'}
+              {editingId ? 'Editar Peça de Crochê' : 'Cadastrar Peça & Publicar no Catálogo'}
             </h2>
             <p className="panel-subtitle">
-              Informe o tipo, cores, linhas usadas em gramas e horas gastas na confecção.
+              Cadastre a peça com fotos, linhas usadas e horas para aparecer automaticamente no Catálogo Virtual.
             </p>
           </div>
           {editingId && (
@@ -324,7 +383,7 @@ export default function ProductManager({
 
             <div className="field-group">
               <label className="field-label">
-                <span>Tipo do Produto *</span>
+                <span>Categoria / Tipo *</span>
               </label>
               <select
                 className="select"
@@ -338,6 +397,129 @@ export default function ProductManager({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Fotos da Peça para o Catálogo Virtual */}
+          <div className="field-group">
+            <label className="field-label">
+              <span>Fotos da Peça (para o Catálogo Virtual)</span>
+              <span className="field-hint">Câmera do celular ou galeria</span>
+            </label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhotos}
+                style={{ flex: 1 }}
+              >
+                <Camera size={18} color="var(--primary)" />
+                {uploadingPhotos
+                  ? 'Enviando foto(s)...'
+                  : 'Tirar Foto ou Escolher da Galeria'}
+              </button>
+            </div>
+
+            {form.fotos && form.fotos.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  flexWrap: 'wrap',
+                  marginTop: '0.45rem',
+                }}
+              >
+                {form.fotos.map((url, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      position: 'relative',
+                      width: '78px',
+                      height: '78px',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      border: '2px solid var(--border-strong)',
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt={`Foto ${idx + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(idx)}
+                      style={{
+                        position: 'absolute',
+                        top: '3px',
+                        right: '3px',
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        background: 'rgba(220, 38, 38, 0.9)',
+                        color: '#fff',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      title="Remover foto"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Detalhes / Medidas para a Cliente + Visibilidade no Catálogo */}
+          <div className="field-group">
+            <div className="field-label">
+              <span>Detalhes e Medidas da Peça (visível para a cliente)</span>
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.78rem',
+                  color: 'var(--secondary)',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.visivelCatalogo}
+                  onChange={(e) =>
+                    setForm({ ...form, visivelCatalogo: e.target.checked })
+                  }
+                />
+                Mostrar no Catálogo Virtual
+              </label>
+            </div>
+            <textarea
+              rows={2}
+              className="textarea"
+              placeholder="Ex: Medida 70cm x 50cm. Confeccionado em barbante 100% algodão. Aceito encomendas em outras cores!"
+              value={form.observacoes}
+              onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+            />
           </div>
 
           {/* Cores do Produto (Uma ou Mais Cores) */}
@@ -543,17 +725,17 @@ export default function ProductManager({
             )}
           </div>
 
-          {/* Peso Total do Produto e Custos Extras */}
-          <div className="form-row-2">
+          {/* Peso Total do Produto, Custos Extras e Estoque */}
+          <div className="form-row-3">
             <div className="field-group">
               <label className="field-label">
-                <span>Peso Total do Produto (g) *</span>
+                <span>Peso da Peça (g) *</span>
                 <label
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '0.3rem',
-                    fontSize: '0.75rem',
+                    gap: '0.25rem',
+                    fontSize: '0.72rem',
                     color: 'var(--secondary)',
                     cursor: 'pointer',
                   }}
@@ -571,7 +753,7 @@ export default function ProductManager({
                       })
                     }
                   />
-                  Somar linhas ({livePricing.pesoTotalLinhas}g)
+                  Auto ({livePricing.pesoTotalLinhas}g)
                 </label>
               </label>
               <input
@@ -595,8 +777,7 @@ export default function ProductManager({
 
             <div className="field-group">
               <label className="field-label">
-                <span>Acessórios / Embalagem (R$)</span>
-                <span className="field-hint">Opcional (etiqueta, argola)</span>
+                <span>Extras / Emb. (R$)</span>
               </label>
               <input
                 type="number"
@@ -612,8 +793,7 @@ export default function ProductManager({
 
             <div className="field-group">
               <label className="field-label">
-                <span>Qtd. em Estoque (Pronta Entrega)</span>
-                <span className="field-hint">Quantas unidades já tem prontas</span>
+                <span>Qtd. em Estoque</span>
               </label>
               <input
                 type="number"
@@ -792,7 +972,7 @@ export default function ProductManager({
 
             <div className="receipt-total">
               <div>
-                <div className="total-label">VALOR FINAL DA PEÇA</div>
+                <div className="total-label">PREÇO NO CATÁLOGO VIRTUAL</div>
                 <div style={{ fontSize: '0.74rem', opacity: 0.9 }}>
                   {livePricing.margemLucro > 0
                     ? `Material + ${livePricing.horasGastas}h + ${livePricing.margemLucro}% margem`
@@ -812,7 +992,7 @@ export default function ProductManager({
               </>
             ) : (
               <>
-                <Plus size={18} /> Salvar Produto e Precificação
+                <Plus size={18} /> Salvar Peça e Publicar no Catálogo
               </>
             )}
           </button>
@@ -825,10 +1005,10 @@ export default function ProductManager({
           <div>
             <h2 className="panel-title">
               <Sparkles size={20} color="var(--secondary)" />
-              Catálogo de Peças ({filteredProducts.length})
+              Peças Cadastradas ({filteredProducts.length})
             </h2>
             <p className="panel-subtitle">
-              O custo das peças é atualizado automaticamente se o valor de um rolo de linha mudar.
+              Gerencie suas peças e escolha quais aparecem no Catálogo Virtual das clientes.
             </p>
           </div>
         </div>
@@ -855,6 +1035,11 @@ export default function ProductManager({
                 yarnsMap,
                 laborConfig.valorHoraPadrao
               );
+              const isVisible = prod.visivelCatalogo ?? true;
+              const coverPhoto =
+                Array.isArray(prod.fotos) && prod.fotos.length > 0
+                  ? prod.fotos[0]
+                  : null;
 
               return (
                 <div key={prod.id} className="product-card">
@@ -867,40 +1052,100 @@ export default function ProductManager({
                       flexWrap: 'wrap',
                     }}
                   >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{prod.nome}</h3>
-                        <span className="tag order-tag">{prod.tipo}</span>
-                        <span className="tag">
-                          <Scale size={12} /> {prod.pesoTotal}g
-                        </span>
-                        <span
-                          className="tag"
+                    <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center' }}>
+                      {coverPhoto ? (
+                        <img
+                          src={coverPhoto}
+                          alt={prod.nome}
                           style={{
-                            background:
-                              (Number(prod.estoqueAtual) || 0) > 0
-                                ? 'var(--bg-sage-soft)'
-                                : '#FEF3C7',
-                            color:
-                              (Number(prod.estoqueAtual) || 0) > 0
-                                ? 'var(--secondary)'
-                                : '#92400E',
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '12px',
+                            objectFit: 'cover',
+                            border: '1px solid var(--border-strong)',
+                            flexShrink: 0,
                           }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '12px',
+                            background: 'var(--bg-subtle)',
+                            border: '1px dashed var(--border-strong)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--text-light)',
+                            flexShrink: 0,
+                          }}
+                          title="Sem foto cadastrada"
                         >
-                          Estoque: {Number(prod.estoqueAtual) || 0} un.
-                        </span>
-                      </div>
+                          <ImageIcon size={22} />
+                        </div>
+                      )}
 
-                      <div className="color-chips-wrap" style={{ marginTop: '0.4rem' }}>
-                        {(prod.cores || []).map((cor) => (
-                          <span key={cor} className="tag" style={{ background: '#FFF' }}>
-                            <Palette size={11} color="var(--primary)" /> {cor}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                          <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{prod.nome}</h3>
+                          <span className="tag order-tag">{prod.tipo}</span>
+                          <span className="tag">
+                            <Scale size={12} /> {prod.pesoTotal}g
                           </span>
-                        ))}
+                          <span
+                            className="tag"
+                            style={{
+                              background:
+                                (Number(prod.estoqueAtual) || 0) > 0
+                                  ? 'var(--bg-sage-soft)'
+                                  : '#FEF3C7',
+                              color:
+                                (Number(prod.estoqueAtual) || 0) > 0
+                                  ? 'var(--secondary)'
+                                  : '#92400E',
+                            }}
+                          >
+                            Estoque: {Number(prod.estoqueAtual) || 0} un.
+                          </span>
+                        </div>
+
+                        <div className="color-chips-wrap" style={{ marginTop: '0.4rem' }}>
+                          {(prod.cores || []).map((cor) => (
+                            <span key={cor} className="tag" style={{ background: '#FFF' }}>
+                              <Palette size={11} color="var(--primary)" /> {cor}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => handleToggleCatalogVisibility(prod)}
+                        title={
+                          isVisible
+                            ? 'Clique para ocultar do catálogo público'
+                            : 'Clique para mostrar no catálogo público'
+                        }
+                        style={{
+                          color: isVisible ? 'var(--secondary)' : 'var(--text-muted)',
+                          borderColor: isVisible ? '#C6E0D4' : 'var(--border-strong)',
+                        }}
+                      >
+                        {isVisible ? (
+                          <>
+                            <Eye size={14} /> No Catálogo
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff size={14} /> Oculta
+                          </>
+                        )}
+                      </button>
+
                       <button
                         type="button"
                         className="btn btn-outline btn-sm"
@@ -913,7 +1158,7 @@ export default function ProductManager({
                           </>
                         ) : (
                           <>
-                            <Copy size={14} /> Orçamento
+                            <Copy size={14} /> Ficha
                           </>
                         )}
                       </button>
@@ -935,6 +1180,20 @@ export default function ProductManager({
                       </button>
                     </div>
                   </div>
+
+                  {prod.observacoes && (
+                    <div
+                      style={{
+                        fontSize: '0.8rem',
+                        color: 'var(--text-muted)',
+                        background: 'var(--bg-subtle)',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                      }}
+                    >
+                      {prod.observacoes}
+                    </div>
+                  )}
 
                   {/* Lista Mobile-Friendly de Linhas Usadas na Peça */}
                   <div className="product-yarns-mini-list">
@@ -988,8 +1247,8 @@ export default function ProductManager({
                     <div className="breakdown-item">
                       <span>
                         {calc.margemLucro > 0
-                          ? `Valor Final (c/ +${calc.margemLucro}%)`
-                          : 'Valor Final da Peça'}
+                          ? `Preço no Catálogo (c/ +${calc.margemLucro}%)`
+                          : 'Preço no Catálogo'}
                       </span>
                       <strong style={{ color: 'var(--primary)', fontSize: '1.1rem' }}>
                         {formatCurrency(calc.valorFinalSugerido)}

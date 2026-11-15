@@ -44,6 +44,12 @@ export function mapProductFromDb(row) {
     estoqueAtual: Number(row.estoque_atual) || 0,
     estoqueMinimo: Number(row.estoque_minimo) || 0,
     observacoes: row.observacoes || '',
+    fotos: Array.isArray(row.fotos) ? row.fotos : [],
+    visivelCatalogo:
+      row.visivel_catalogo === undefined || row.visivel_catalogo === null
+        ? true
+        : Boolean(row.visivel_catalogo),
+    precoCatalogo: Number(row.preco_catalogo) || 0,
     criadoEm: row.criado_em || '',
   };
 }
@@ -64,6 +70,10 @@ export function mapProductToDb(prod, userId) {
     estoque_atual: Math.max(0, Number(prod.estoqueAtual) || 0),
     estoque_minimo: Math.max(0, Number(prod.estoqueMinimo) || 0),
     observacoes: prod.observacoes || '',
+    fotos: Array.isArray(prod.fotos) ? prod.fotos : [],
+    visivel_catalogo:
+      prod.visivelCatalogo === undefined ? true : Boolean(prod.visivelCatalogo),
+    preco_catalogo: Number(prod.precoCatalogo) || 0,
     criado_em: prod.criadoEm || '',
   };
 }
@@ -175,6 +185,9 @@ export async function fetchAllUserData(userId) {
         diasPorSemana: Number(laborRes.data.dias_por_semana) || 5,
         horasPorDia: Number(laborRes.data.horas_por_dia) || 8,
         margemLucroPadrao: Number(laborRes.data.margem_lucro_padrao) || 0,
+        whatsappAtelier: laborRes.data.whatsapp_atelier || '',
+        bioAtelier:
+          laborRes.data.bio_atelier || INITIAL_LABOR_CONFIG.bioAtelier,
       }
     : INITIAL_LABOR_CONFIG;
 
@@ -188,10 +201,41 @@ export async function fetchAllUserData(userId) {
   };
 }
 
+/**
+ * Busca os dados públicos para o Catálogo Virtual das clientes (sem exigir login)
+ */
+export async function fetchPublicCatalogData() {
+  const [productsRes, yarnsRes, laborRes] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*')
+      .eq('visivel_catalogo', true)
+      .order('created_at', { ascending: false }),
+    supabase.from('yarns').select('*'),
+    supabase.from('labor_settings').select('*').limit(1).maybeSingle(),
+  ]);
+
+  const products = (productsRes.data || []).map(mapProductFromDb);
+  const yarns = (yarnsRes.data || []).map(mapYarnFromDb);
+  const laborConfig = laborRes.data
+    ? {
+        valorHoraPadrao: Number(laborRes.data.valor_hora_padrao) || 0,
+        whatsappAtelier: laborRes.data.whatsapp_atelier || '',
+        bioAtelier:
+          laborRes.data.bio_atelier || INITIAL_LABOR_CONFIG.bioAtelier,
+      }
+    : INITIAL_LABOR_CONFIG;
+
+  return {
+    products,
+    yarns,
+    laborConfig,
+  };
+}
+
 export async function syncTableCollection(tableName, userId, items, mapToDbFn) {
   if (!userId) return;
 
-  // Busca IDs existentes no banco para remover os que foram excluídos na tela
   const { data: existingRows } = await supabase
     .from(tableName)
     .select('id')
@@ -226,8 +270,86 @@ export async function syncLaborSettings(userId, laborConfig) {
       dias_por_semana: Number(laborConfig.diasPorSemana) || 5,
       horas_por_dia: Number(laborConfig.horasPorDia) || 8,
       margem_lucro_padrao: Number(laborConfig.margemLucroPadrao) || 0,
+      whatsapp_atelier: laborConfig.whatsappAtelier || '',
+      bio_atelier:
+        laborConfig.bioAtelier || INITIAL_LABOR_CONFIG.bioAtelier,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' }
   );
+}
+
+/**
+ * Redimensiona/comprime a foto no navegador (para ficar leve no celular) e envia ao Supabase Storage
+ */
+export async function compressAndUploadPhoto(file) {
+  const compressedBlob = await compressImageFile(file, 1000, 0.82);
+  const fileName = `peca-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}.jpg`;
+
+  const { error } = await supabase.storage
+    .from('product-photos')
+    .upload(fileName, compressedBlob, {
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+
+  if (error) {
+    // Fallback para Data URL caso haja restrição de rede temporária
+    return await blobToDataURL(compressedBlob);
+  }
+
+  const { data: pubData } = supabase.storage
+    .from('product-photos')
+    .getPublicUrl(fileName);
+
+  return pubData?.publicUrl || (await blobToDataURL(compressedBlob));
+}
+
+function compressImageFile(file, maxDimension = 1000, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Falha ao comprimir imagem'));
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
