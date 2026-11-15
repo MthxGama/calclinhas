@@ -9,12 +9,19 @@ import {
   Clock,
   FileText,
   Trash2,
+  KeyRound,
+  LogOut,
 } from 'lucide-react';
 import YarnManager from './components/YarnManager';
 import ProductManager from './components/ProductManager';
 import StockManager from './components/StockManager';
 import LaborCalculator from './components/LaborCalculator';
 import QuoteManager from './components/QuoteManager';
+import {
+  useAuth,
+  LoginScreen,
+  ChangePasswordModal,
+} from './components/AuthGate';
 import {
   INITIAL_YARNS,
   INITIAL_PRODUCTS,
@@ -31,6 +38,15 @@ const STORAGE_KEYS = {
 };
 
 export default function App() {
+  const {
+    isAuthenticated,
+    isCheckingAuth,
+    credentials,
+    login,
+    logout,
+    updateCredentials,
+  } = useAuth();
+
   const [activeTab, setActiveTab] = useState('yarns');
   const [yarns, setYarns] = useState(INITIAL_YARNS);
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
@@ -38,6 +54,7 @@ export default function App() {
   const [quotes, setQuotes] = useState([]);
   const [stockHistory, setStockHistory] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   // Carrega os dados salvos no navegador após montar no cliente (evita erro de hidratação no Next.js)
   useEffect(() => {
@@ -162,6 +179,16 @@ export default function App() {
     }
   }
 
+  // Enquanto verifica se a sessão está salva no navegador
+  if (isCheckingAuth) {
+    return null;
+  }
+
+  // Se não estiver logada, exibe apenas a tela de Login e Senha
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={login} />;
+  }
+
   return (
     <div className="app-shell">
       {/* Cabeçalho Principal */}
@@ -230,7 +257,7 @@ export default function App() {
             </button>
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <button
               type="button"
               className="hourly-pill"
@@ -239,6 +266,15 @@ export default function App() {
             >
               <Clock size={14} />
               Hora: {formatCurrency(laborConfig.valorHoraPadrao)}/h
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowPasswordModal(true)}
+              title="Alterar Login e Senha"
+            >
+              <KeyRound size={16} />
             </button>
 
             {(yarns.length > 0 || products.length > 0 || quotes.length > 0) && (
@@ -251,9 +287,27 @@ export default function App() {
                 <Trash2 size={15} />
               </button>
             )}
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={logout}
+              title="Sair / Bloquear acesso"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Modal para Alterar Login e Senha */}
+      {showPasswordModal && (
+        <ChangePasswordModal
+          currentUsername={credentials.username}
+          onClose={() => setShowPasswordModal(false)}
+          onSaveCredentials={updateCredentials}
+        />
+      )}
 
       {/* Conteúdo Principal */}
       <main className="main-container">
