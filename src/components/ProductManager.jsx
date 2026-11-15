@@ -1,0 +1,946 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import {
+  Plus,
+  Trash2,
+  Edit3,
+  ShoppingBag,
+  Scale,
+  Clock,
+  Palette,
+  Calculator,
+  Copy,
+  Check,
+  X,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
+import { PRODUCT_TYPES, PRESET_COLORS } from '../data/initialData';
+import {
+  calculateProductPricing,
+  getCostPerGram,
+  formatCurrency,
+  formatNumber,
+} from '../utils/calculations';
+
+export default function ProductManager({
+  products,
+  setProducts,
+  yarns,
+  laborConfig,
+  onNavigateToYarns,
+  onNavigateToLabor,
+}) {
+  const yarnsMap = useMemo(() => {
+    const map = {};
+    yarns.forEach((y) => {
+      map[y.id] = y;
+    });
+    return map;
+  }, [yarns]);
+
+  const createEmptyForm = () => ({
+    nome: '',
+    tipo: PRODUCT_TYPES[0],
+    cores: ['Cru'],
+    pesoTotal: '',
+    autoSyncPeso: true,
+    linhasUsadas:
+      yarns.length > 0
+        ? [{ yarnId: yarns[0].id, pesoUsado: 150 }]
+        : [],
+    horasGastas: 3,
+    valorHora: laborConfig.valorHoraPadrao,
+    custoExtra: 0,
+    margemLucro: laborConfig.margemLucroPadrao || 0,
+    observacoes: '',
+  });
+
+  const [form, setForm] = useState(createEmptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [colorInput, setColorInput] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Cálculo em tempo real da peça sendo montada no formulário
+  const livePricing = useMemo(() => {
+    return calculateProductPricing(form, yarnsMap, laborConfig.valorHoraPadrao);
+  }, [form, yarnsMap, laborConfig.valorHoraPadrao]);
+
+  const effectivePesoProduto = form.autoSyncPeso
+    ? livePricing.pesoTotalLinhas
+    : Number(form.pesoTotal) || 0;
+
+  function handleAddColor(colorName) {
+    const trimmed = (colorName || colorInput).trim();
+    if (!trimmed) return;
+    if (!form.cores.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      setForm((prev) => ({
+        ...prev,
+        cores: [...prev.cores, trimmed],
+      }));
+    }
+    setColorInput('');
+  }
+
+  function handleRemoveColor(colorToRemove) {
+    setForm((prev) => ({
+      ...prev,
+      cores: prev.cores.filter((c) => c !== colorToRemove),
+    }));
+  }
+
+  function handleSyncColorsFromYarns() {
+    const yarnColors = form.linhasUsadas
+      .map((u) => yarnsMap[u.yarnId]?.cor)
+      .filter(Boolean);
+    const merged = Array.from(new Set([...form.cores, ...yarnColors]));
+    setForm((prev) => ({ ...prev, cores: merged }));
+  }
+
+  function handleAddYarnUsage() {
+    if (yarns.length === 0) return;
+    const defaultYarn = yarns[0];
+    setForm((prev) => {
+      const nextColors = prev.cores.includes(defaultYarn.cor)
+        ? prev.cores
+        : [...prev.cores, defaultYarn.cor];
+      return {
+        ...prev,
+        cores: nextColors,
+        linhasUsadas: [
+          ...prev.linhasUsadas,
+          { yarnId: defaultYarn.id, pesoUsado: 100 },
+        ],
+      };
+    });
+  }
+
+  function handleUpdateYarnUsage(index, field, value) {
+    setForm((prev) => {
+      const updated = prev.linhasUsadas.map((item, idx) =>
+        idx === index ? { ...item, [field]: value } : item
+      );
+      // Se trocou a linha, adiciona a cor dela nas cores do produto caso ainda não esteja
+      let updatedColors = prev.cores;
+      if (field === 'yarnId' && yarnsMap[value]?.cor) {
+        const newColor = yarnsMap[value].cor;
+        if (!updatedColors.includes(newColor)) {
+          updatedColors = [...updatedColors, newColor];
+        }
+      }
+      return {
+        ...prev,
+        cores: updatedColors,
+        linhasUsadas: updated,
+      };
+    });
+  }
+
+  function handleRemoveYarnUsage(index) {
+    setForm((prev) => ({
+      ...prev,
+      linhasUsadas: prev.linhasUsadas.filter((_, idx) => idx !== index),
+    }));
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.nome.trim()) {
+      alert('Informe o nome ou identificação da peça.');
+      return;
+    }
+    if (form.linhasUsadas.length === 0) {
+      alert('Adicione pelo menos uma linha utilizada na confecção da peça.');
+      return;
+    }
+
+    const payload = {
+      id: editingId || `prod-${Date.now()}`,
+      nome: form.nome.trim(),
+      tipo: form.tipo,
+      cores: form.cores.length > 0 ? form.cores : ['Cru'],
+      pesoTotal: effectivePesoProduto,
+      linhasUsadas: form.linhasUsadas.map((u) => ({
+        yarnId: u.yarnId,
+        pesoUsado: Number(u.pesoUsado) || 0,
+      })),
+      horasGastas: Number(form.horasGastas) || 0,
+      valorHora: Number(form.valorHora) || 0,
+      custoExtra: Number(form.custoExtra) || 0,
+      margemLucro: Number(form.margemLucro) || 0,
+      observacoes: form.observacoes.trim(),
+      criadoEm: new Date().toISOString().slice(0, 10),
+    };
+
+    if (editingId) {
+      setProducts((prev) => prev.map((p) => (p.id === editingId ? payload : p)));
+      setEditingId(null);
+    } else {
+      setProducts((prev) => [payload, ...prev]);
+    }
+
+    setForm(createEmptyForm());
+  }
+
+  function handleEdit(prod) {
+    setEditingId(prod.id);
+    const sumLinhas = (prod.linhasUsadas || []).reduce(
+      (acc, cur) => acc + (Number(cur.pesoUsado) || 0),
+      0
+    );
+    setForm({
+      nome: prod.nome,
+      tipo: prod.tipo,
+      cores: prod.cores || [],
+      pesoTotal: prod.pesoTotal,
+      autoSyncPeso: Number(prod.pesoTotal) === sumLinhas,
+      linhasUsadas: prod.linhasUsadas || [],
+      horasGastas: prod.horasGastas,
+      valorHora: prod.valorHora,
+      custoExtra: prod.custoExtra || 0,
+      margemLucro: prod.margemLucro || 0,
+      observacoes: prod.observacoes || '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleDelete(id) {
+    if (window.confirm('Deseja excluir esta peça do catálogo?')) {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      if (editingId === id) {
+        setEditingId(null);
+        setForm(createEmptyForm());
+      }
+    }
+  }
+
+  function handleCopySummary(prod) {
+    const calc = calculateProductPricing(prod, yarnsMap, laborConfig.valorHoraPadrao);
+    const linhasTexto = calc.itensLinhas
+      .map((item) =>
+        item.yarn
+          ? `• ${item.yarn.descricao} (${item.yarn.cor} - ${item.yarn.marca}): ${item.pesoUsado}g = ${formatCurrency(item.custoSubtotal)}`
+          : `• Linha removida: ${item.pesoUsado}g`
+      )
+      .join('\n');
+
+    const text = [
+      `🧶 *FICHA DE PRECIFICAÇÃO - ${prod.nome.toUpperCase()}*`,
+      `📌 Tipo: ${prod.tipo}`,
+      `🎨 Cores: ${(prod.cores || []).join(', ')}`,
+      `⚖️ Peso da Peça: ${prod.pesoTotal}g`,
+      ``,
+      `*Linhas Utilizadas:*`,
+      linhasTexto,
+      `💰 Custo de Linhas: ${formatCurrency(calc.custoLinhas)}`,
+      calc.custoExtra > 0 ? `✨ Acessórios/Extras: ${formatCurrency(calc.custoExtra)}` : null,
+      `⏱️ Mão de Obra: ${calc.horasGastas}h × ${formatCurrency(calc.valorHora)}/h = ${formatCurrency(calc.custoMaoDeObra)}`,
+      `────────────────────`,
+      `💵 *Custo Base (Material + Horas):* ${formatCurrency(calc.valorBasePeca)}`,
+      calc.margemLucro > 0
+        ? `🌟 *Valor Final c/ Margem (${calc.margemLucro}%):* ${formatCurrency(calc.valorFinalSugerido)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    navigator.clipboard.writeText(text);
+    setCopiedId(prod.id);
+    setTimeout(() => setCopiedId(null), 2500);
+  }
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const q = searchTerm.toLowerCase();
+      return (
+        p.nome.toLowerCase().includes(q) ||
+        p.tipo.toLowerCase().includes(q) ||
+        (p.cores || []).some((c) => c.toLowerCase().includes(q))
+      );
+    });
+  }, [products, searchTerm]);
+
+  return (
+    <div className="workspace-grid-wide">
+      {/* Coluna Esquerda: Cadastro do Produto e Cálculo Automático */}
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">
+              <ShoppingBag size={20} color="var(--primary)" />
+              {editingId ? 'Editar Peça de Crochê' : 'Cadastrar Peça & Calcular Valor'}
+            </h2>
+            <p className="panel-subtitle">
+              Informe o tipo, cores, linhas usadas em gramas e horas gastas na confecção.
+            </p>
+          </div>
+          {editingId && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setEditingId(null);
+                setForm(createEmptyForm());
+              }}
+            >
+              <X size={16} /> Cancelar
+            </button>
+          )}
+        </div>
+
+        <form className="form-stack" onSubmit={handleSubmit}>
+          {/* Nome e Tipo do Produto */}
+          <div className="form-row-2">
+            <div className="field-group">
+              <label className="field-label">
+                <span>Nome / Modelo da Peça *</span>
+              </label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Ex: Tapete Oval Bico Russo, Sousplat..."
+                value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">
+                <span>Tipo do Produto *</span>
+              </label>
+              <select
+                className="select"
+                value={form.tipo}
+                onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+              >
+                {PRODUCT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Cores do Produto (Uma ou Mais Cores) */}
+          <div className="field-group">
+            <label className="field-label">
+              <span>Cores do Produto (uma ou mais cores) *</span>
+              <button
+                type="button"
+                onClick={handleSyncColorsFromYarns}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--primary)',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                + Puxar cores das linhas escolhidas
+              </button>
+            </label>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                className="input"
+                placeholder="Digite uma cor e clique em Adicionar (ex: Cru, Mostarda)..."
+                value={colorInput}
+                onChange={(e) => setColorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddColor();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => handleAddColor()}
+              >
+                Adicionar Cor
+              </button>
+            </div>
+
+            {/* Sugestões rápidas de cores */}
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+              {PRESET_COLORS.slice(0, 10).map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  className="tag"
+                  style={{ cursor: 'pointer', fontSize: '0.7rem' }}
+                  onClick={() => handleAddColor(c.name)}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: c.hex,
+                      border: '1px solid rgba(0,0,0,0.2)',
+                    }}
+                  />
+                  + {c.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Cores selecionadas na peça */}
+            <div className="color-chips-wrap">
+              {form.cores.map((cor) => (
+                <span key={cor} className="color-chip">
+                  <Palette size={13} color="var(--primary)" />
+                  {cor}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveColor(cor)}
+                    title="Remover cor"
+                  >
+                    <X size={13} />
+                  </button>
+                </span>
+              ))}
+              {form.cores.length === 0 && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                  Nenhuma cor adicionada ainda.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Quais Linhas Usou + Quantidade em Peso (g) */}
+          <div className="field-group">
+            <div className="field-label">
+              <span>Quais Linhas Usou & Peso de Cada Linha (gramas) *</span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleAddYarnUsage}
+              >
+                <Plus size={14} /> Adicionar Linha na Peça
+              </button>
+            </div>
+
+            {yarns.length === 0 ? (
+              <div className="calc-preview-box">
+                <span>Você ainda não tem rolos de linha cadastrados.</span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={onNavigateToYarns}
+                >
+                  Cadastrar Linha
+                </button>
+              </div>
+            ) : (
+              <div className="yarn-usage-list">
+                {form.linhasUsadas.map((usage, index) => {
+                  const selectedYarn = yarnsMap[usage.yarnId];
+                  const costPerGram = getCostPerGram(selectedYarn);
+                  const subtotal = costPerGram * (Number(usage.pesoUsado) || 0);
+
+                  return (
+                    <div key={index} className="yarn-usage-row">
+                      <div>
+                        <label
+                          style={{
+                            fontSize: '0.73rem',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            display: 'block',
+                            marginBottom: '0.2rem',
+                          }}
+                        >
+                          Linha #{index + 1} (Tipo, Cor, Ordem e Marca)
+                        </label>
+                        <select
+                          className="select"
+                          value={usage.yarnId}
+                          onChange={(e) =>
+                            handleUpdateYarnUsage(index, 'yarnId', e.target.value)
+                          }
+                        >
+                          {yarns.map((y) => (
+                            <option key={y.id} value={y.id}>
+                              {y.descricao} — Cor: {y.cor} ({y.marca} | {y.ordem} |{' '}
+                              {formatCurrency(y.valor)}/{y.pesoRolo}g)
+                            </option>
+                          ))}
+                        </select>
+                        <div className="yarn-usage-cost">
+                          Custo desta linha na peça: {formatCurrency(subtotal)} (R${' '}
+                          {formatNumber(costPerGram, 4)}/g)
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          style={{
+                            fontSize: '0.73rem',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            display: 'block',
+                            marginBottom: '0.2rem',
+                          }}
+                        >
+                          Peso Usado (g)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          className="input"
+                          placeholder="Gramas"
+                          value={usage.pesoUsado}
+                          onChange={(e) =>
+                            handleUpdateYarnUsage(index, 'pesoUsado', e.target.value)
+                          }
+                          required
+                        />
+                      </div>
+
+                      <div style={{ paddingTop: '1.1rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-danger-ghost btn-sm"
+                          onClick={() => handleRemoveYarnUsage(index)}
+                          title="Remover esta linha"
+                          disabled={form.linhasUsadas.length === 1}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Peso Total do Produto e Custos Extras */}
+          <div className="form-row-2">
+            <div className="field-group">
+              <label className="field-label">
+                <span>Peso Total do Produto (gramas) *</span>
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.74rem',
+                    color: 'var(--secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.autoSyncPeso}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        autoSyncPeso: e.target.checked,
+                        pesoTotal: e.target.checked
+                          ? livePricing.pesoTotalLinhas
+                          : form.pesoTotal || livePricing.pesoTotalLinhas,
+                      })
+                    }
+                  />
+                  Somar linhas ({livePricing.pesoTotalLinhas}g)
+                </label>
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="input"
+                value={effectivePesoProduto}
+                disabled={form.autoSyncPeso}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    autoSyncPeso: false,
+                    pesoTotal: e.target.value,
+                  })
+                }
+                required
+              />
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">
+                <span>Acessórios / Embalagem (R$)</span>
+                <span className="field-hint">Opcional (etiqueta, argola, pérola)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.10"
+                className="input"
+                placeholder="0.00"
+                value={form.custoExtra}
+                onChange={(e) => setForm({ ...form, custoExtra: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Módulo de Horas Gastas e Valor da Hora para a Peça */}
+          <div
+            style={{
+              background: 'var(--bg-sage-soft)',
+              border: '1px solid #C6E0D4',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.75rem',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  color: 'var(--secondary)',
+                }}
+              >
+                <Clock size={17} /> Tempo de Confecção & Valor da Hora
+              </div>
+              <button
+                type="button"
+                onClick={onNavigateToLabor}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--secondary)',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+              >
+                Abrir Calculadora de Valor da Hora
+              </button>
+            </div>
+
+            <div className="form-row-3">
+              <div className="field-group">
+                <label className="field-label">
+                  <span>Horas Gastas *</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  className="input"
+                  placeholder="Ex: 4.5"
+                  value={form.horasGastas}
+                  onChange={(e) => setForm({ ...form, horasGastas: e.target.value })}
+                  required
+                />
+                <span className="field-hint">Ex: 2.5 = 2h e 30min</span>
+              </div>
+
+              <div className="field-group">
+                <label className="field-label">
+                  <span>Valor da Hora (R$/h) *</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.50"
+                  className="input"
+                  value={form.valorHora}
+                  onChange={(e) => setForm({ ...form, valorHora: e.target.value })}
+                  required
+                />
+                <span className="field-hint">
+                  Padrão: {formatCurrency(laborConfig.valorHoraPadrao)}/h
+                </span>
+              </div>
+
+              <div className="field-group">
+                <label className="field-label">
+                  <span>Lucro Extra (%)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="300"
+                  step="5"
+                  className="input"
+                  value={form.margemLucro}
+                  onChange={(e) => setForm({ ...form, margemLucro: e.target.value })}
+                />
+                <span className="field-hint">0% = apenas Custo + Horas</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Recibo de Precificação Automática em Tempo Real */}
+          <div className="pricing-receipt">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontWeight: 700,
+                color: 'var(--primary)',
+                fontSize: '0.95rem',
+              }}
+            >
+              <Calculator size={18} /> Resumo do Cálculo da Peça
+            </div>
+
+            <div className="receipt-row">
+              <span>
+                Custo das Linhas ({livePricing.pesoTotalLinhas}g no total):
+              </span>
+              <strong>{formatCurrency(livePricing.custoLinhas)}</strong>
+            </div>
+
+            {livePricing.custoExtra > 0 && (
+              <div className="receipt-row">
+                <span>Acessórios / Custos Extras:</span>
+                <strong>{formatCurrency(livePricing.custoExtra)}</strong>
+              </div>
+            )}
+
+            <div className="receipt-row">
+              <span>
+                Mão de Obra ({livePricing.horasGastas}h ×{' '}
+                {formatCurrency(livePricing.valorHora)}/h):
+              </span>
+              <strong>{formatCurrency(livePricing.custoMaoDeObra)}</strong>
+            </div>
+
+            <div className="receipt-divider" />
+
+            <div className="receipt-row" style={{ fontSize: '0.98rem' }}>
+              <span>
+                <strong>Valor da Peça (Material + Horas):</strong>
+              </span>
+              <strong style={{ color: 'var(--secondary)', fontSize: '1.1rem' }}>
+                {formatCurrency(livePricing.valorBasePeca)}
+              </strong>
+            </div>
+
+            {livePricing.margemLucro > 0 && (
+              <div className="receipt-row">
+                <span>
+                  + Valorização / Margem do Ateliê ({livePricing.margemLucro}%):
+                </span>
+                <strong>+ {formatCurrency(livePricing.valorLucro)}</strong>
+              </div>
+            )}
+
+            <div className="receipt-total">
+              <div>
+                <div className="total-label">VALOR FINAL DA PEÇA</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                  {livePricing.margemLucro > 0
+                    ? `Material + ${livePricing.horasGastas}h de trabalho + ${livePricing.margemLucro}% margem`
+                    : `Custo de linhas + ${livePricing.horasGastas}h de trabalho`}
+                </div>
+              </div>
+              <div className="total-amount">
+                {formatCurrency(livePricing.valorFinalSugerido)}
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+            {editingId ? (
+              <>
+                <Check size={18} /> Atualizar Peça Cadastrada
+              </>
+            ) : (
+              <>
+                <Plus size={18} /> Salvar Produto e Precificação
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* Coluna Direita: Lista de Produtos Confeccionados */}
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">
+              <Sparkles size={20} color="var(--secondary)" />
+              Catálogo de Peças Confeccionadas ({filteredProducts.length})
+            </h2>
+            <p className="panel-subtitle">
+              O custo das peças é atualizado automaticamente se o valor de um rolo de linha mudar.
+            </p>
+          </div>
+        </div>
+
+        <div className="search-bar">
+          <input
+            type="text"
+            className="input"
+            placeholder="Buscar peça por nome, tipo (ex: Tapete, Amigurumi) ou cor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="empty-state">
+            <p>Nenhuma peça cadastrada ainda. Use o formulário ao lado para criar a primeira!</p>
+          </div>
+        ) : (
+          <div className="form-stack">
+            {filteredProducts.map((prod) => {
+              const calc = calculateProductPricing(
+                prod,
+                yarnsMap,
+                laborConfig.valorHoraPadrao
+              );
+
+              return (
+                <div key={prod.id} className="product-card">
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: '1rem',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{prod.nome}</h3>
+                        <span className="tag order-tag">{prod.tipo}</span>
+                        <span className="tag">
+                          <Scale size={12} /> Peso: {prod.pesoTotal}g
+                        </span>
+                      </div>
+
+                      <div className="color-chips-wrap" style={{ marginTop: '0.45rem' }}>
+                        {(prod.cores || []).map((cor) => (
+                          <span key={cor} className="tag" style={{ background: '#FFF' }}>
+                            <Palette size={11} color="var(--primary)" /> {cor}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => handleCopySummary(prod)}
+                        title="Copiar ficha para WhatsApp"
+                      >
+                        {copiedId === prod.id ? (
+                          <>
+                            <Check size={14} color="var(--secondary)" /> Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} /> Copiar Orçamento
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleEdit(prod)}
+                        title="Editar peça"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger-ghost btn-sm"
+                        onClick={() => handleDelete(prod.id)}
+                        title="Excluir peça"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tabela de Linhas Usadas na Peça */}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="product-yarns-table">
+                      <thead>
+                        <tr>
+                          <th>Linha Utilizada</th>
+                          <th>Cor / Marca</th>
+                          <th>Ordem</th>
+                          <th>Peso Usado</th>
+                          <th>Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calc.itensLinhas.map((item, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <strong>
+                                {item.yarn ? item.yarn.descricao : 'Linha excluída'}
+                              </strong>
+                            </td>
+                            <td>
+                              {item.yarn ? `${item.yarn.cor} (${item.yarn.marca})` : '-'}
+                            </td>
+                            <td>{item.yarn ? item.yarn.ordem : '-'}</td>
+                            <td>{item.pesoUsado}g</td>
+                            <td>
+                              <strong>{formatCurrency(item.custoSubtotal)}</strong>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Resumo de Custos e Valor Final */}
+                  <div className="product-breakdown-grid">
+                    <div className="breakdown-item">
+                      <span>Custo de Material ({calc.pesoTotalLinhas}g)</span>
+                      <strong>{formatCurrency(calc.custoMaterialTotal)}</strong>
+                    </div>
+                    <div className="breakdown-item">
+                      <span>
+                        Mão de Obra ({calc.horasGastas}h × {formatCurrency(calc.valorHora)}/h)
+                      </span>
+                      <strong>{formatCurrency(calc.custoMaoDeObra)}</strong>
+                    </div>
+                    <div className="breakdown-item">
+                      <span>
+                        {calc.margemLucro > 0
+                          ? `Valor Final (c/ +${calc.margemLucro}%)`
+                          : 'Valor Final (Material + Horas)'}
+                      </span>
+                      <strong style={{ color: 'var(--primary)', fontSize: '1.08rem' }}>
+                        {formatCurrency(calc.valorFinalSugerido)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
