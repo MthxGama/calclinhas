@@ -35,7 +35,6 @@ export default function App() {
   // Carrega os dados salvos no navegador após montar no cliente (evita erro de hidratação no Next.js)
   useEffect(() => {
     try {
-      // Remove chaves antigas de demonstração caso existam
       localStorage.removeItem('calclinhas_yarns_v1');
       localStorage.removeItem('calclinhas_products_v1');
       localStorage.removeItem('calclinhas_labor_v1');
@@ -126,10 +125,10 @@ export default function App() {
         <div className="topbar-inner">
           <div className="brand">
             <div className="brand-icon">
-              <Sparkles size={24} />
+              <Sparkles size={20} />
             </div>
             <div>
-              <div className="brand-title">Ateliê CalcLinhas Crochê</div>
+              <div className="brand-title">Ateliê CalcLinhas</div>
               <div className="brand-subtitle">
                 Gestão de Rolos de Linha, Produtos e Cálculo de Valor Final
               </div>
@@ -167,15 +166,15 @@ export default function App() {
             </button>
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <button
               type="button"
               className="hourly-pill"
               onClick={() => setActiveTab('labor')}
               title="Clique para ajustar quanto vale a sua hora"
             >
-              <Clock size={15} />
-              Hora atual: {formatCurrency(laborConfig.valorHoraPadrao)}/h
+              <Clock size={14} />
+              Hora: {formatCurrency(laborConfig.valorHoraPadrao)}/h
             </button>
 
             {(yarns.length > 0 || products.length > 0) && (
@@ -198,49 +197,49 @@ export default function App() {
         <section className="kpi-grid">
           <div className="kpi-card">
             <div className="kpi-icon terracotta">
-              <Layers size={22} />
+              <Layers size={20} />
             </div>
             <div>
-              <div className="kpi-label">Rolos Cadastrados</div>
-              <div className="kpi-value">{yarns.length} rolos</div>
-              <div className="kpi-sub">Total: {stats.totalYarnsWeight}g em catálogo</div>
+              <div className="kpi-label">Rolos</div>
+              <div className="kpi-value">{yarns.length}</div>
+              <div className="kpi-sub">Total: {stats.totalYarnsWeight}g</div>
             </div>
           </div>
 
           <div className="kpi-card">
             <div className="kpi-icon gold">
-              <DollarSign size={22} />
+              <DollarSign size={20} />
             </div>
             <div>
-              <div className="kpi-label">Soma dos Rolos</div>
+              <div className="kpi-label">Soma Rolos</div>
               <div className="kpi-value">{formatCurrency(stats.totalYarnsValue)}</div>
-              <div className="kpi-sub">Base para o cálculo por grama</div>
+              <div className="kpi-sub">Base por grama</div>
             </div>
           </div>
 
           <div className="kpi-card">
             <div className="kpi-icon purple">
-              <ShoppingBag size={22} />
+              <ShoppingBag size={20} />
             </div>
             <div>
-              <div className="kpi-label">Peças Confeccionadas</div>
-              <div className="kpi-value">{products.length} peça(s)</div>
+              <div className="kpi-label">Peças</div>
+              <div className="kpi-value">{products.length}</div>
               <div className="kpi-sub">
-                Valor somado: {formatCurrency(stats.totalCatalogSaleValue)}
+                Catálogo: {formatCurrency(stats.totalCatalogSaleValue)}
               </div>
             </div>
           </div>
 
           <div className="kpi-card">
             <div className="kpi-icon sage">
-              <Clock size={22} />
+              <Clock size={20} />
             </div>
             <div>
-              <div className="kpi-label">Valor da Mão de Obra</div>
+              <div className="kpi-label">Sua Hora</div>
               <div className="kpi-value">
                 {formatCurrency(laborConfig.valorHoraPadrao)}/h
               </div>
-              <div className="kpi-sub">Configurável no módulo 3</div>
+              <div className="kpi-sub">Mão de obra</div>
             </div>
           </div>
         </section>
@@ -275,6 +274,51 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Barra de Navegação Inferior Fixa para Celular */}
+      <nav className="mobile-bottom-nav" aria-label="Navegação Mobile">
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === 'yarns' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('yarns');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Layers size={20} />
+          <span>1. Linhas</span>
+          {yarns.length > 0 && (
+            <span className="mobile-nav-badge">{yarns.length}</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === 'products' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('products');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <ShoppingBag size={20} />
+          <span>2. Peças</span>
+          {products.length > 0 && (
+            <span className="mobile-nav-badge">{products.length}</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === 'labor' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('labor');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Clock size={20} />
+          <span>3. Valor/Hora</span>
+        </button>
+      </nav>
     </div>
   );
 }

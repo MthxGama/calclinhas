@@ -3,8 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import {
   Clock,
-  DollarSign,
-  Calculator,
   CheckCircle2,
   RefreshCw,
   TrendingUp,
@@ -27,7 +25,6 @@ export default function LaborCalculator({
     return map;
   }, [yarns]);
 
-  // Estado para o simulador rápido de peça
   const [selectedProductId, setSelectedProductId] = useState(
     products.length > 0 ? products[0].id : 'AVULSO'
   );
@@ -35,14 +32,14 @@ export default function LaborCalculator({
   const [simMinutos, setSimMinutos] = useState(30);
   const [simValorHora, setSimValorHora] = useState(laborConfig.valorHoraPadrao || 15);
   const [simCustoMaterialAvulso, setSimCustoMaterialAvulso] = useState(18.5);
-  const [simMargem, setSimMargem] = useState(laborConfig.margemLucroPadrao || 20);
+  const [simMargem, setSimMargem] = useState(laborConfig.margemLucroPadrao || 0);
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   // Cálculo de sugestão de valor da hora baseado na meta mensal
   const horasMensais = useMemo(() => {
     const dias = Number(laborConfig.diasPorSemana) || 0;
     const horasDia = Number(laborConfig.horasPorDia) || 0;
-    return dias * horasDia * 4.33; // média de 4,33 semanas no mês
+    return dias * horasDia * 4.33;
   }, [laborConfig.diasPorSemana, laborConfig.horasPorDia]);
 
   const valorHoraSugeridoMeta = useMemo(() => {
@@ -50,7 +47,6 @@ export default function LaborCalculator({
     return (Number(laborConfig.metaMensal) || 0) / horasMensais;
   }, [laborConfig.metaMensal, horasMensais]);
 
-  // Produto selecionado no simulador
   const selectedProduct = useMemo(() => {
     if (selectedProductId === 'AVULSO') return null;
     return products.find((p) => p.id === selectedProductId) || null;
@@ -150,7 +146,7 @@ export default function LaborCalculator({
             <div>
               <h2 className="panel-title">
                 <Award size={20} color="var(--primary)" />
-                1. Quanto Vale a Sua Hora de Crochê
+                1. Quanto Vale a Sua Hora
               </h2>
               <p className="panel-subtitle">
                 Defina o valor da sua hora diretamente ou descubra com base na sua meta mensal.
@@ -168,15 +164,16 @@ export default function LaborCalculator({
               }}
             >
               <label className="field-label" style={{ marginBottom: '0.4rem' }}>
-                <span>Valor Oficial da Sua Hora de Trabalho (R$/hora)</span>
+                <span>Valor da Sua Hora de Trabalho (R$/hora)</span>
               </label>
-              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   type="number"
-                  min="1"
+                  inputMode="decimal"
+                  min="0"
                   step="0.50"
                   className="input"
-                  style={{ fontSize: '1.1rem', fontWeight: 700 }}
+                  style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1, minWidth: '130px' }}
                   value={laborConfig.valorHoraPadrao}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -184,15 +181,16 @@ export default function LaborCalculator({
                     setSimValorHora(val);
                   }}
                 />
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={handleUpdateAllProductsHourlyRate}
-                  title="Aplicar este valor da hora em todas as peças já cadastradas"
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  <RefreshCw size={15} /> Aplicar nas Peças
-                </button>
+                {products.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleUpdateAllProductsHourlyRate}
+                    title="Aplicar este valor da hora em todas as peças já cadastradas"
+                  >
+                    <RefreshCw size={15} /> Aplicar nas Peças
+                  </button>
+                )}
               </div>
             </div>
 
@@ -206,7 +204,7 @@ export default function LaborCalculator({
                 Não sabe quanto cobrar por hora? Calcule aqui:
               </h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
-                Informe quanto deseja tirar por mês com o crochê e sua rotina de trabalho:
+                Informe quanto deseja ganhar por mês com o crochê e sua rotina:
               </p>
 
               <div className="form-stack">
@@ -216,9 +214,11 @@ export default function LaborCalculator({
                   </label>
                   <input
                     type="number"
-                    min="100"
+                    inputMode="decimal"
+                    min="0"
                     step="50"
                     className="input"
+                    placeholder="Ex: 2400"
                     value={laborConfig.metaMensal}
                     onChange={(e) =>
                       setLaborConfig({ ...laborConfig, metaMensal: e.target.value })
@@ -233,6 +233,7 @@ export default function LaborCalculator({
                     </label>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min="1"
                       max="7"
                       className="input"
@@ -249,6 +250,7 @@ export default function LaborCalculator({
                     </label>
                     <input
                       type="number"
+                      inputMode="decimal"
                       min="1"
                       max="16"
                       step="0.5"
@@ -264,9 +266,9 @@ export default function LaborCalculator({
                 <div className="calc-preview-box sage">
                   <div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      Total de <strong>{ formatNumber(horasMensais, 0) } horas/mês</strong> dedicadas
+                      Total de <strong>{formatNumber(horasMensais, 0)} horas/mês</strong> dedicadas
                     </div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--secondary)' }}>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--secondary)' }}>
                       Sua hora vale: {formatCurrency(valorHoraSugeridoMeta)} / h
                     </div>
                   </div>
@@ -289,7 +291,7 @@ export default function LaborCalculator({
             <div>
               <h2 className="panel-title">
                 <Clock size={20} color="var(--secondary)" />
-                2. Calcular Horas Gastas & Valor Final da Peça
+                2. Horas Gastas & Valor Final da Peça
               </h2>
               <p className="panel-subtitle">
                 Escolha uma peça cadastrada (ou simule uma nova) informando as horas gastas.
@@ -309,7 +311,7 @@ export default function LaborCalculator({
               >
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    Peça Cadastrada: {p.nome} ({p.tipo} - {p.pesoTotal}g)
+                    Peça: {p.nome} ({p.tipo} - {p.pesoTotal}g)
                   </option>
                 ))}
                 <option value="AVULSO">
@@ -328,7 +330,7 @@ export default function LaborCalculator({
                     {formatCurrency(selectedProductCalc.custoMaterialTotal)}
                   </strong>
                 </div>
-                <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   Cores: {(selectedProduct.cores || []).join(', ')}
                 </div>
               </div>
@@ -339,6 +341,7 @@ export default function LaborCalculator({
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.50"
                   className="input"
@@ -351,10 +354,11 @@ export default function LaborCalculator({
             <div className="form-row-2">
               <div className="field-group">
                 <label className="field-label">
-                  <span>Horas Inteira Gastas</span>
+                  <span>Horas Gastas</span>
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   step="1"
                   className="input"
@@ -365,10 +369,11 @@ export default function LaborCalculator({
 
               <div className="field-group">
                 <label className="field-label">
-                  <span>Minutos Adicionais (0 a 59)</span>
+                  <span>Minutos Extras (0 a 59)</span>
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   max="59"
                   step="5"
@@ -386,6 +391,7 @@ export default function LaborCalculator({
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.50"
                   className="input"
@@ -400,6 +406,7 @@ export default function LaborCalculator({
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   step="5"
                   className="input"
@@ -417,7 +424,7 @@ export default function LaborCalculator({
               </div>
               <div className="receipt-row">
                 <span>
-                  2. Mão de Obra ({simHoras}h {simMinutos > 0 ? `e ${simMinutos}min` : ''} ×{' '}
+                  2. Mão de Obra ({simHoras}h {simMinutos > 0 ? `${simMinutos}m` : ''} ×{' '}
                   {formatCurrency(simValorHora)}/h):
                 </span>
                 <strong>{formatCurrency(custoMaoDeObraSimulado)}</strong>
@@ -425,15 +432,15 @@ export default function LaborCalculator({
               <div className="receipt-divider" />
               <div className="receipt-row">
                 <span>
-                  <strong>Valor da Peça (Material + Horas Trabalhadas):</strong>
+                  <strong>Valor Base (Material + Horas):</strong>
                 </span>
-                <strong style={{ color: 'var(--secondary)', fontSize: '1.08rem' }}>
+                <strong style={{ color: 'var(--secondary)', fontSize: '1.05rem' }}>
                   {formatCurrency(valorPecaSemMargem)}
                 </strong>
               </div>
               {Number(simMargem) > 0 && (
                 <div className="receipt-row">
-                  <span>3. Margem Adicional do Ateliê ({simMargem}%):</span>
+                  <span>3. Margem Adicional ({simMargem}%):</span>
                   <strong>+ {formatCurrency(valorLucroSimulado)}</strong>
                 </div>
               )}
@@ -441,7 +448,7 @@ export default function LaborCalculator({
               <div className="receipt-total">
                 <div>
                   <div className="total-label">VALOR FINAL DETERMINADO</div>
-                  <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                  <div style={{ fontSize: '0.74rem', opacity: 0.9 }}>
                     Equivale a {formatNumber(totalHorasSimuladas, 2)}h de trabalho artesanal
                   </div>
                 </div>
@@ -458,23 +465,23 @@ export default function LaborCalculator({
                 <CheckCircle2 size={18} />
                 {savedFeedback
                   ? 'Horas e Valor Salvos na Peça!'
-                  : `Salvar Horas e Valor na Peça "${selectedProduct.nome}"`}
+                  : `Salvar Horas e Valor em "${selectedProduct.nome}"`}
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Tabela Geral de Horas e Precificação Final de Todas as Peças */}
+      {/* Cards Interativos Mobile-First de Horas e Precificação Final por Peça */}
       <div className="panel">
         <div className="panel-header">
           <div>
             <h2 className="panel-title">
               <TrendingUp size={20} color="var(--primary)" />
-              Painel Geral: Horas Gastas e Valor Final por Peça
+              Ajuste Rápido de Horas e Valor por Peça
             </h2>
             <p className="panel-subtitle">
-              Altere as horas gastas ou o valor da hora diretamente na tabela para recalcular o preço final na hora.
+              Altere as horas gastas ou o valor da hora abaixo para recalcular o preço final de cada peça na hora.
             </p>
           </div>
         </div>
@@ -482,94 +489,80 @@ export default function LaborCalculator({
         {products.length === 0 ? (
           <div className="empty-state">Nenhuma peça cadastrada ainda.</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="product-yarns-table" style={{ fontSize: '0.88rem' }}>
-              <thead>
-                <tr>
-                  <th>Peça / Tipo</th>
-                  <th>Peso Total</th>
-                  <th>Custo de Linhas</th>
-                  <th style={{ width: '140px' }}>Horas Gastas</th>
-                  <th style={{ width: '150px' }}>Valor da Hora (R$)</th>
-                  <th>Custo Mão de Obra</th>
-                  <th>Valor Base (Linha + Hora)</th>
-                  <th>Valor Final c/ Margem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((prod) => {
-                  const calc = calculateProductPricing(
-                    prod,
-                    yarnsMap,
-                    laborConfig.valorHoraPadrao
-                  );
-                  return (
-                    <tr key={prod.id}>
-                      <td>
-                        <strong>{prod.nome}</strong>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {prod.tipo} • Cores: {(prod.cores || []).join(', ')}
-                        </div>
-                      </td>
-                      <td>{prod.pesoTotal}g</td>
-                      <td>
-                        <strong>{formatCurrency(calc.custoMaterialTotal)}</strong>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.25"
-                          className="input"
-                          style={{ padding: '0.35rem 0.5rem' }}
-                          value={prod.horasGastas}
-                          onChange={(e) =>
-                            handleInlineProductChange(prod.id, 'horasGastas', e.target.value)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.50"
-                          className="input"
-                          style={{ padding: '0.35rem 0.5rem' }}
-                          value={prod.valorHora}
-                          onChange={(e) =>
-                            handleInlineProductChange(prod.id, 'valorHora', e.target.value)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <strong>{formatCurrency(calc.custoMaoDeObra)}</strong>
-                      </td>
-                      <td>
-                        <strong style={{ color: 'var(--secondary)' }}>
-                          {formatCurrency(calc.valorBasePeca)}
-                        </strong>
-                      </td>
-                      <td>
-                        <strong style={{ color: 'var(--primary)', fontSize: '1rem' }}>
-                          {formatCurrency(calc.valorFinalSugerido)}
-                        </strong>
-                        {calc.margemLucro > 0 && (
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: '0.7rem',
-                              color: 'var(--text-muted)',
-                            }}
-                          >
-                            (+{calc.margemLucro}% lucro)
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="labor-pieces-grid">
+            {products.map((prod) => {
+              const calc = calculateProductPricing(
+                prod,
+                yarnsMap,
+                laborConfig.valorHoraPadrao
+              );
+              return (
+                <div key={prod.id} className="labor-piece-card">
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <strong style={{ fontSize: '1rem' }}>{prod.nome}</strong>
+                      <span className="tag">{prod.pesoTotal}g</span>
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                      {prod.tipo} • Cores: {(prod.cores || []).join(', ')}
+                    </div>
+                  </div>
+
+                  <div className="form-row-2">
+                    <div className="field-group">
+                      <label className="field-label" style={{ fontSize: '0.76rem' }}>
+                        <span>Horas Gastas</span>
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.25"
+                        className="input"
+                        value={prod.horasGastas}
+                        onChange={(e) =>
+                          handleInlineProductChange(prod.id, 'horasGastas', e.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="field-group">
+                      <label className="field-label" style={{ fontSize: '0.76rem' }}>
+                        <span>Valor Hora (R$)</span>
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.50"
+                        className="input"
+                        value={prod.valorHora}
+                        onChange={(e) =>
+                          handleInlineProductChange(prod.id, 'valorHora', e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="product-breakdown-grid">
+                    <div className="breakdown-item">
+                      <span>Linhas</span>
+                      <strong>{formatCurrency(calc.custoMaterialTotal)}</strong>
+                    </div>
+                    <div className="breakdown-item">
+                      <span>Mão de Obra</span>
+                      <strong>{formatCurrency(calc.custoMaoDeObra)}</strong>
+                    </div>
+                    <div className="breakdown-item">
+                      <span>Valor Final</span>
+                      <strong style={{ color: 'var(--primary)', fontSize: '1.08rem' }}>
+                        {formatCurrency(calc.valorFinalSugerido)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

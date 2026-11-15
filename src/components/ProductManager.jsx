@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Trash2,
@@ -13,7 +13,6 @@ import {
   Copy,
   Check,
   X,
-  RefreshCw,
   Sparkles,
 } from 'lucide-react';
 import { PRODUCT_TYPES, PRESET_COLORS } from '../data/initialData';
@@ -43,7 +42,7 @@ export default function ProductManager({
   const createEmptyForm = () => ({
     nome: '',
     tipo: PRODUCT_TYPES[0],
-    cores: ['Cru'],
+    cores: yarns.length > 0 ? [yarns[0].cor] : ['Cru'],
     pesoTotal: '',
     autoSyncPeso: true,
     linhasUsadas:
@@ -62,6 +61,17 @@ export default function ProductManager({
   const [colorInput, setColorInput] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Se o usuário acabou de cadastrar a primeira linha, pré-seleciona ela no formulário vazio
+  useEffect(() => {
+    if (!editingId && form.linhasUsadas.length === 0 && yarns.length > 0) {
+      setForm((prev) => ({
+        ...prev,
+        cores: [yarns[0].cor],
+        linhasUsadas: [{ yarnId: yarns[0].id, pesoUsado: 150 }],
+      }));
+    }
+  }, [yarns, editingId, form.linhasUsadas.length]);
 
   // Cálculo em tempo real da peça sendo montada no formulário
   const livePricing = useMemo(() => {
@@ -122,7 +132,6 @@ export default function ProductManager({
       const updated = prev.linhasUsadas.map((item, idx) =>
         idx === index ? { ...item, [field]: value } : item
       );
-      // Se trocou a linha, adiciona a cor dela nas cores do produto caso ainda não esteja
       let updatedColors = prev.cores;
       if (field === 'yarnId' && yarnsMap[value]?.cor) {
         const newColor = yarnsMap[value].cor;
@@ -328,7 +337,7 @@ export default function ProductManager({
           {/* Cores do Produto (Uma ou Mais Cores) */}
           <div className="field-group">
             <label className="field-label">
-              <span>Cores do Produto (uma ou mais cores) *</span>
+              <span>Cores do Produto (uma ou mais) *</span>
               <button
                 type="button"
                 onClick={handleSyncColorsFromYarns}
@@ -341,7 +350,7 @@ export default function ProductManager({
                   cursor: 'pointer',
                 }}
               >
-                + Puxar cores das linhas escolhidas
+                + Puxar cores das linhas
               </button>
             </label>
 
@@ -349,7 +358,7 @@ export default function ProductManager({
               <input
                 type="text"
                 className="input"
-                placeholder="Digite uma cor e clique em Adicionar (ex: Cru, Mostarda)..."
+                placeholder="Digite uma cor (ex: Cru, Mostarda)..."
                 value={colorInput}
                 onChange={(e) => setColorInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -363,19 +372,20 @@ export default function ProductManager({
                 type="button"
                 className="btn btn-outline"
                 onClick={() => handleAddColor()}
+                style={{ whiteSpace: 'nowrap' }}
               >
-                Adicionar Cor
+                + Cor
               </button>
             </div>
 
             {/* Sugestões rápidas de cores */}
             <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-              {PRESET_COLORS.slice(0, 10).map((c) => (
+              {PRESET_COLORS.slice(0, 8).map((c) => (
                 <button
                   key={c.name}
                   type="button"
                   className="tag"
-                  style={{ cursor: 'pointer', fontSize: '0.7rem' }}
+                  style={{ cursor: 'pointer', fontSize: '0.72rem' }}
                   onClick={() => handleAddColor(c.name)}
                 >
                   <span
@@ -403,7 +413,7 @@ export default function ProductManager({
                     onClick={() => handleRemoveColor(cor)}
                     title="Remover cor"
                   >
-                    <X size={13} />
+                    <X size={14} />
                   </button>
                 </span>
               ))}
@@ -418,25 +428,27 @@ export default function ProductManager({
           {/* Quais Linhas Usou + Quantidade em Peso (g) */}
           <div className="field-group">
             <div className="field-label">
-              <span>Quais Linhas Usou & Peso de Cada Linha (gramas) *</span>
+              <span>Quais Linhas Usou & Peso (g) *</span>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
                 onClick={handleAddYarnUsage}
               >
-                <Plus size={14} /> Adicionar Linha na Peça
+                <Plus size={14} /> + Linha na Peça
               </button>
             </div>
 
             {yarns.length === 0 ? (
               <div className="calc-preview-box">
-                <span>Você ainda não tem rolos de linha cadastrados.</span>
+                <span style={{ fontSize: '0.85rem' }}>
+                  Cadastre primeiro os rolos de linha na aba <strong>1. Linhas</strong> para selecioná-los aqui.
+                </span>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={onNavigateToYarns}
                 >
-                  Cadastrar Linha
+                  Ir para Cadastro de Linhas
                 </button>
               </div>
             ) : (
@@ -451,11 +463,11 @@ export default function ProductManager({
                       <div>
                         <label
                           style={{
-                            fontSize: '0.73rem',
+                            fontSize: '0.75rem',
                             color: 'var(--text-muted)',
                             fontWeight: 600,
                             display: 'block',
-                            marginBottom: '0.2rem',
+                            marginBottom: '0.25rem',
                           }}
                         >
                           Linha #{index + 1} (Tipo, Cor, Ordem e Marca)
@@ -469,13 +481,13 @@ export default function ProductManager({
                         >
                           {yarns.map((y) => (
                             <option key={y.id} value={y.id}>
-                              {y.descricao} — Cor: {y.cor} ({y.marca} | {y.ordem} |{' '}
+                              {y.descricao} — {y.cor} ({y.marca} | {y.ordem} |{' '}
                               {formatCurrency(y.valor)}/{y.pesoRolo}g)
                             </option>
                           ))}
                         </select>
                         <div className="yarn-usage-cost">
-                          Custo desta linha na peça: {formatCurrency(subtotal)} (R${' '}
+                          Custo na peça: {formatCurrency(subtotal)} (R${' '}
                           {formatNumber(costPerGram, 4)}/g)
                         </div>
                       </div>
@@ -483,17 +495,18 @@ export default function ProductManager({
                       <div>
                         <label
                           style={{
-                            fontSize: '0.73rem',
+                            fontSize: '0.75rem',
                             color: 'var(--text-muted)',
                             fontWeight: 600,
                             display: 'block',
-                            marginBottom: '0.2rem',
+                            marginBottom: '0.25rem',
                           }}
                         >
                           Peso Usado (g)
                         </label>
                         <input
                           type="number"
+                          inputMode="numeric"
                           min="1"
                           step="1"
                           className="input"
@@ -506,7 +519,7 @@ export default function ProductManager({
                         />
                       </div>
 
-                      <div style={{ paddingTop: '1.1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         <button
                           type="button"
                           className="btn btn-danger-ghost btn-sm"
@@ -514,7 +527,7 @@ export default function ProductManager({
                           title="Remover esta linha"
                           disabled={form.linhasUsadas.length === 1}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={16} /> Remover
                         </button>
                       </div>
                     </div>
@@ -528,13 +541,13 @@ export default function ProductManager({
           <div className="form-row-2">
             <div className="field-group">
               <label className="field-label">
-                <span>Peso Total do Produto (gramas) *</span>
+                <span>Peso Total do Produto (g) *</span>
                 <label
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.3rem',
-                    fontSize: '0.74rem',
+                    fontSize: '0.75rem',
                     color: 'var(--secondary)',
                     cursor: 'pointer',
                   }}
@@ -557,6 +570,7 @@ export default function ProductManager({
               </label>
               <input
                 type="number"
+                inputMode="numeric"
                 min="1"
                 step="1"
                 className="input"
@@ -576,10 +590,11 @@ export default function ProductManager({
             <div className="field-group">
               <label className="field-label">
                 <span>Acessórios / Embalagem (R$)</span>
-                <span className="field-hint">Opcional (etiqueta, argola, pérola)</span>
+                <span className="field-hint">Opcional (etiqueta, argola)</span>
               </label>
               <input
                 type="number"
+                inputMode="decimal"
                 min="0"
                 step="0.10"
                 className="input"
@@ -604,6 +619,8 @@ export default function ProductManager({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: '0.5rem',
+                flexWrap: 'wrap',
                 marginBottom: '0.75rem',
               }}
             >
@@ -617,7 +634,7 @@ export default function ProductManager({
                   color: 'var(--secondary)',
                 }}
               >
-                <Clock size={17} /> Tempo de Confecção & Valor da Hora
+                <Clock size={17} /> Horas Gastas & Valor da Hora
               </div>
               <button
                 type="button"
@@ -632,7 +649,7 @@ export default function ProductManager({
                   cursor: 'pointer',
                 }}
               >
-                Abrir Calculadora de Valor da Hora
+                Calcular valor da minha hora
               </button>
             </div>
 
@@ -643,6 +660,7 @@ export default function ProductManager({
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.25"
                   className="input"
@@ -660,6 +678,7 @@ export default function ProductManager({
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.50"
                   className="input"
@@ -678,6 +697,7 @@ export default function ProductManager({
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   max="300"
                   step="5"
@@ -707,14 +727,14 @@ export default function ProductManager({
 
             <div className="receipt-row">
               <span>
-                Custo das Linhas ({livePricing.pesoTotalLinhas}g no total):
+                Custo das Linhas ({livePricing.pesoTotalLinhas}g):
               </span>
               <strong>{formatCurrency(livePricing.custoLinhas)}</strong>
             </div>
 
             {livePricing.custoExtra > 0 && (
               <div className="receipt-row">
-                <span>Acessórios / Custos Extras:</span>
+                <span>Acessórios / Extras:</span>
                 <strong>{formatCurrency(livePricing.custoExtra)}</strong>
               </div>
             )}
@@ -729,11 +749,11 @@ export default function ProductManager({
 
             <div className="receipt-divider" />
 
-            <div className="receipt-row" style={{ fontSize: '0.98rem' }}>
+            <div className="receipt-row" style={{ fontSize: '0.95rem' }}>
               <span>
-                <strong>Valor da Peça (Material + Horas):</strong>
+                <strong>Valor Base (Material + Horas):</strong>
               </span>
-              <strong style={{ color: 'var(--secondary)', fontSize: '1.1rem' }}>
+              <strong style={{ color: 'var(--secondary)', fontSize: '1.08rem' }}>
                 {formatCurrency(livePricing.valorBasePeca)}
               </strong>
             </div>
@@ -741,7 +761,7 @@ export default function ProductManager({
             {livePricing.margemLucro > 0 && (
               <div className="receipt-row">
                 <span>
-                  + Valorização / Margem do Ateliê ({livePricing.margemLucro}%):
+                  + Margem do Ateliê ({livePricing.margemLucro}%):
                 </span>
                 <strong>+ {formatCurrency(livePricing.valorLucro)}</strong>
               </div>
@@ -750,9 +770,9 @@ export default function ProductManager({
             <div className="receipt-total">
               <div>
                 <div className="total-label">VALOR FINAL DA PEÇA</div>
-                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                <div style={{ fontSize: '0.74rem', opacity: 0.9 }}>
                   {livePricing.margemLucro > 0
-                    ? `Material + ${livePricing.horasGastas}h de trabalho + ${livePricing.margemLucro}% margem`
+                    ? `Material + ${livePricing.horasGastas}h + ${livePricing.margemLucro}% margem`
                     : `Custo de linhas + ${livePricing.horasGastas}h de trabalho`}
                 </div>
               </div>
@@ -782,7 +802,7 @@ export default function ProductManager({
           <div>
             <h2 className="panel-title">
               <Sparkles size={20} color="var(--secondary)" />
-              Catálogo de Peças Confeccionadas ({filteredProducts.length})
+              Catálogo de Peças ({filteredProducts.length})
             </h2>
             <p className="panel-subtitle">
               O custo das peças é atualizado automaticamente se o valor de um rolo de linha mudar.
@@ -794,7 +814,7 @@ export default function ProductManager({
           <input
             type="text"
             className="input"
-            placeholder="Buscar peça por nome, tipo (ex: Tapete, Amigurumi) ou cor..."
+            placeholder="Buscar peça por nome, tipo ou cor..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -802,7 +822,7 @@ export default function ProductManager({
 
         {filteredProducts.length === 0 ? (
           <div className="empty-state">
-            <p>Nenhuma peça cadastrada ainda. Use o formulário ao lado para criar a primeira!</p>
+            <p>Nenhuma peça cadastrada ainda. Use o formulário para cadastrar a primeira!</p>
           </div>
         ) : (
           <div className="form-stack">
@@ -820,20 +840,20 @@ export default function ProductManager({
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'flex-start',
-                      gap: '1rem',
+                      gap: '0.75rem',
                       flexWrap: 'wrap',
                     }}
                   >
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{prod.nome}</h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{prod.nome}</h3>
                         <span className="tag order-tag">{prod.tipo}</span>
                         <span className="tag">
-                          <Scale size={12} /> Peso: {prod.pesoTotal}g
+                          <Scale size={12} /> {prod.pesoTotal}g
                         </span>
                       </div>
 
-                      <div className="color-chips-wrap" style={{ marginTop: '0.45rem' }}>
+                      <div className="color-chips-wrap" style={{ marginTop: '0.4rem' }}>
                         {(prod.cores || []).map((cor) => (
                           <span key={cor} className="tag" style={{ background: '#FFF' }}>
                             <Palette size={11} color="var(--primary)" /> {cor}
@@ -842,7 +862,7 @@ export default function ProductManager({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="btn btn-outline btn-sm"
@@ -855,7 +875,7 @@ export default function ProductManager({
                           </>
                         ) : (
                           <>
-                            <Copy size={14} /> Copiar Orçamento
+                            <Copy size={14} /> Orçamento
                           </>
                         )}
                       </button>
@@ -878,49 +898,52 @@ export default function ProductManager({
                     </div>
                   </div>
 
-                  {/* Tabela de Linhas Usadas na Peça */}
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="product-yarns-table">
-                      <thead>
-                        <tr>
-                          <th>Linha Utilizada</th>
-                          <th>Cor / Marca</th>
-                          <th>Ordem</th>
-                          <th>Peso Usado</th>
-                          <th>Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {calc.itensLinhas.map((item, idx) => (
-                          <tr key={idx}>
-                            <td>
-                              <strong>
-                                {item.yarn ? item.yarn.descricao : 'Linha excluída'}
-                              </strong>
-                            </td>
-                            <td>
-                              {item.yarn ? `${item.yarn.cor} (${item.yarn.marca})` : '-'}
-                            </td>
-                            <td>{item.yarn ? item.yarn.ordem : '-'}</td>
-                            <td>{item.pesoUsado}g</td>
-                            <td>
-                              <strong>{formatCurrency(item.custoSubtotal)}</strong>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  {/* Lista Mobile-Friendly de Linhas Usadas na Peça */}
+                  <div className="product-yarns-mini-list">
+                    <div
+                      style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em',
+                      }}
+                    >
+                      Linhas Utilizadas na Peça:
+                    </div>
+                    {calc.itensLinhas.map((item, idx) => (
+                      <div key={idx} className="product-yarn-mini-item">
+                        <div>
+                          <strong>
+                            {item.yarn ? item.yarn.descricao : 'Linha excluída'}
+                          </strong>
+                          {item.yarn && (
+                            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.76rem' }}>
+                              Cor: {item.yarn.cor} • {item.yarn.marca} ({item.yarn.ordem})
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
+                            {item.pesoUsado}g
+                          </span>
+                          <strong style={{ color: 'var(--secondary)' }}>
+                            {formatCurrency(item.custoSubtotal)}
+                          </strong>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Resumo de Custos e Valor Final */}
                   <div className="product-breakdown-grid">
                     <div className="breakdown-item">
-                      <span>Custo de Material ({calc.pesoTotalLinhas}g)</span>
+                      <span>Material ({calc.pesoTotalLinhas}g)</span>
                       <strong>{formatCurrency(calc.custoMaterialTotal)}</strong>
                     </div>
                     <div className="breakdown-item">
                       <span>
-                        Mão de Obra ({calc.horasGastas}h × {formatCurrency(calc.valorHora)}/h)
+                        Mão de Obra ({calc.horasGastas}h)
                       </span>
                       <strong>{formatCurrency(calc.custoMaoDeObra)}</strong>
                     </div>
@@ -928,9 +951,9 @@ export default function ProductManager({
                       <span>
                         {calc.margemLucro > 0
                           ? `Valor Final (c/ +${calc.margemLucro}%)`
-                          : 'Valor Final (Material + Horas)'}
+                          : 'Valor Final da Peça'}
                       </span>
-                      <strong style={{ color: 'var(--primary)', fontSize: '1.08rem' }}>
+                      <strong style={{ color: 'var(--primary)', fontSize: '1.1rem' }}>
                         {formatCurrency(calc.valorFinalSugerido)}
                       </strong>
                     </div>

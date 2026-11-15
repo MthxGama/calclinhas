@@ -291,6 +291,7 @@ export default function YarnManager({ yarns, setYarns, products }) {
               </label>
               <input
                 type="number"
+                inputMode="numeric"
                 min="1"
                 step="1"
                 className="input"
@@ -321,6 +322,7 @@ export default function YarnManager({ yarns, setYarns, products }) {
               </label>
               <input
                 type="number"
+                inputMode="decimal"
                 min="0.01"
                 step="0.01"
                 className="input"

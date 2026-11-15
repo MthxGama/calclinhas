@@ -1,9 +1,20 @@
 import '../index.css';
 
 export const metadata = {
-  title: 'Ateliê Crochê & Linhas — Gestão de Estoque e Precificação',
+  title: 'Ateliê Crochê & Linhas — Gestão e Precificação',
   description:
     'Sistema completo para cadastro de rolos de linha, produtos de crochê, cálculo de peso de linhas e valor da hora de trabalho.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'CalcLinhas',
+  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#C85A32',
 };
 
 export default function RootLayout({ children }) {
