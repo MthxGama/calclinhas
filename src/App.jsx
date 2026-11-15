@@ -6,12 +6,13 @@ import {
   Layers,
   ShoppingBag,
   Clock,
-  DollarSign,
+  FileText,
   Trash2,
 } from 'lucide-react';
 import YarnManager from './components/YarnManager';
 import ProductManager from './components/ProductManager';
 import LaborCalculator from './components/LaborCalculator';
+import QuoteManager from './components/QuoteManager';
 import {
   INITIAL_YARNS,
   INITIAL_PRODUCTS,
@@ -23,6 +24,7 @@ const STORAGE_KEYS = {
   YARNS: 'calclinhas_yarns_v2',
   PRODUCTS: 'calclinhas_products_v2',
   LABOR: 'calclinhas_labor_v2',
+  QUOTES: 'calclinhas_quotes_v2',
 };
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
   const [yarns, setYarns] = useState(INITIAL_YARNS);
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [laborConfig, setLaborConfig] = useState(INITIAL_LABOR_CONFIG);
+  const [quotes, setQuotes] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Carrega os dados salvos no navegador após montar no cliente (evita erro de hidratação no Next.js)
@@ -47,6 +50,9 @@ export default function App() {
 
       const savedLabor = localStorage.getItem(STORAGE_KEYS.LABOR);
       if (savedLabor) setLaborConfig(JSON.parse(savedLabor));
+
+      const savedQuotes = localStorage.getItem(STORAGE_KEYS.QUOTES);
+      if (savedQuotes) setQuotes(JSON.parse(savedQuotes));
     } catch (e) {
       console.error(e);
     } finally {
@@ -81,6 +87,15 @@ export default function App() {
     }
   }, [laborConfig, isLoaded]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [quotes, isLoaded]);
+
   // Indicadores Gerais
   const stats = useMemo(() => {
     const totalYarnsValue = yarns.reduce((acc, y) => acc + (Number(y.valor) || 0), 0);
@@ -111,10 +126,12 @@ export default function App() {
     ) {
       setYarns([]);
       setProducts([]);
+      setQuotes([]);
       setLaborConfig(INITIAL_LABOR_CONFIG);
       localStorage.removeItem(STORAGE_KEYS.YARNS);
       localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
       localStorage.removeItem(STORAGE_KEYS.LABOR);
+      localStorage.removeItem(STORAGE_KEYS.QUOTES);
     }
   }
 
@@ -130,7 +147,7 @@ export default function App() {
             <div>
               <div className="brand-title">Ateliê CalcLinhas</div>
               <div className="brand-subtitle">
-                Gestão de Rolos de Linha, Produtos e Cálculo de Valor Final
+                Gestão de Linhas, Peças, Horas e Orçamentos para Clientes
               </div>
             </div>
           </div>
@@ -152,7 +169,7 @@ export default function App() {
               onClick={() => setActiveTab('products')}
             >
               <ShoppingBag size={17} />
-              2. Produtos & Precificação
+              2. Peças & Preço
               <span className="badge-count">{products.length}</span>
             </button>
 
@@ -162,7 +179,17 @@ export default function App() {
               onClick={() => setActiveTab('labor')}
             >
               <Clock size={17} />
-              3. Horas & Valor da Hora
+              3. Valor da Hora
+            </button>
+
+            <button
+              type="button"
+              className={`nav-tab ${activeTab === 'quotes' ? 'active' : ''}`}
+              onClick={() => setActiveTab('quotes')}
+            >
+              <FileText size={17} />
+              4. Orçamentos
+              <span className="badge-count">{quotes.length}</span>
             </button>
           </nav>
 
@@ -177,7 +204,7 @@ export default function App() {
               Hora: {formatCurrency(laborConfig.valorHoraPadrao)}/h
             </button>
 
-            {(yarns.length > 0 || products.length > 0) && (
+            {(yarns.length > 0 || products.length > 0 || quotes.length > 0) && (
               <button
                 type="button"
                 className="btn btn-danger-ghost btn-sm"
@@ -195,7 +222,11 @@ export default function App() {
       <main className="main-container">
         {/* Resumo Rápido no Topo */}
         <section className="kpi-grid">
-          <div className="kpi-card">
+          <div
+            className="kpi-card"
+            onClick={() => setActiveTab('yarns')}
+            style={{ cursor: 'pointer' }}
+          >
             <div className="kpi-icon terracotta">
               <Layers size={20} />
             </div>
@@ -206,18 +237,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="kpi-card">
-            <div className="kpi-icon gold">
-              <DollarSign size={20} />
-            </div>
-            <div>
-              <div className="kpi-label">Soma Rolos</div>
-              <div className="kpi-value">{formatCurrency(stats.totalYarnsValue)}</div>
-              <div className="kpi-sub">Base por grama</div>
-            </div>
-          </div>
-
-          <div className="kpi-card">
+          <div
+            className="kpi-card"
+            onClick={() => setActiveTab('products')}
+            style={{ cursor: 'pointer' }}
+          >
             <div className="kpi-icon purple">
               <ShoppingBag size={20} />
             </div>
@@ -230,7 +254,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="kpi-card">
+          <div
+            className="kpi-card"
+            onClick={() => setActiveTab('labor')}
+            style={{ cursor: 'pointer' }}
+          >
             <div className="kpi-icon sage">
               <Clock size={20} />
             </div>
@@ -240,6 +268,21 @@ export default function App() {
                 {formatCurrency(laborConfig.valorHoraPadrao)}/h
               </div>
               <div className="kpi-sub">Mão de obra</div>
+            </div>
+          </div>
+
+          <div
+            className="kpi-card"
+            onClick={() => setActiveTab('quotes')}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="kpi-icon gold">
+              <FileText size={20} />
+            </div>
+            <div>
+              <div className="kpi-label">Orçamentos</div>
+              <div className="kpi-value">{quotes.length}</div>
+              <div className="kpi-sub">Enviar no WhatsApp</div>
             </div>
           </div>
         </section>
@@ -273,6 +316,17 @@ export default function App() {
             yarns={yarns}
           />
         )}
+
+        {activeTab === 'quotes' && (
+          <QuoteManager
+            quotes={quotes}
+            setQuotes={setQuotes}
+            products={products}
+            yarns={yarns}
+            laborConfig={laborConfig}
+            onNavigateToProducts={() => setActiveTab('products')}
+          />
+        )}
       </main>
 
       {/* Barra de Navegação Inferior Fixa para Celular */}
@@ -285,7 +339,7 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <Layers size={20} />
+          <Layers size={19} />
           <span>1. Linhas</span>
           {yarns.length > 0 && (
             <span className="mobile-nav-badge">{yarns.length}</span>
@@ -300,7 +354,7 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <ShoppingBag size={20} />
+          <ShoppingBag size={19} />
           <span>2. Peças</span>
           {products.length > 0 && (
             <span className="mobile-nav-badge">{products.length}</span>
@@ -315,8 +369,23 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <Clock size={20} />
-          <span>3. Valor/Hora</span>
+          <Clock size={19} />
+          <span>3. Hora</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === 'quotes' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('quotes');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <FileText size={19} />
+          <span>4. Orçamentos</span>
+          {quotes.length > 0 && (
+            <span className="mobile-nav-badge">{quotes.length}</span>
+          )}
         </button>
       </nav>
     </div>
