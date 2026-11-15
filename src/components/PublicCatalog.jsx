@@ -505,20 +505,31 @@ export default function PublicCatalog({ onOpenAdmin }) {
               </button>
             </div>
 
-            {/* Galeria de Fotos */}
+            {/* Galeria de Fotos em Proporção 1:1 */}
             {Array.isArray(activeProduct.fotos) && activeProduct.fotos.length > 0 && (
               <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <SmartImage
-                  src={activeProduct.fotos[activePhotoIndex] || activeProduct.fotos[0]}
-                  alt={activeProduct.nome}
+                <div
                   style={{
                     width: '100%',
-                    maxHeight: '360px',
-                    objectFit: 'cover',
+                    aspectRatio: '1 / 1',
                     borderRadius: '14px',
+                    overflow: 'hidden',
                     border: '1px solid var(--border)',
+                    background: 'var(--bg-subtle)',
                   }}
-                />
+                >
+                  <SmartImage
+                    src={activeProduct.fotos[activePhotoIndex] || activeProduct.fotos[0]}
+                    alt={activeProduct.nome}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      aspectRatio: '1 / 1',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
+                  />
+                </div>
 
                 {activeProduct.fotos.length > 1 && (
                   <div

@@ -445,8 +445,9 @@ export default function ProductManager({
                     key={idx}
                     style={{
                       position: 'relative',
-                      width: '78px',
-                      height: '78px',
+                      width: '80px',
+                      height: '80px',
+                      aspectRatio: '1 / 1',
                       borderRadius: '10px',
                       overflow: 'hidden',
                       border: '2px solid var(--border-strong)',
@@ -1059,8 +1060,9 @@ export default function ProductManager({
                           src={coverPhoto}
                           alt={prod.nome}
                           style={{
-                            width: '64px',
-                            height: '64px',
+                            width: '68px',
+                            height: '68px',
+                            aspectRatio: '1 / 1',
                             borderRadius: '12px',
                             objectFit: 'cover',
                             border: '1px solid var(--border-strong)',
