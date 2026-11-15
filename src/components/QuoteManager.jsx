@@ -41,6 +41,8 @@ export default function QuoteManager({
   quotes,
   setQuotes,
   products,
+  setProducts,
+  setStockHistory,
   yarns,
   laborConfig,
   onNavigateToProducts,
@@ -350,6 +352,61 @@ export default function QuoteManager({
   }
 
   function handleStatusChange(id, newStatus) {
+    const targetQuote = quotes.find((q) => q.id === id);
+    if (
+      targetQuote &&
+      newStatus === 'Entregue' &&
+      targetQuote.status !== 'Entregue' &&
+      !targetQuote.baixaEstoqueRealizada
+    ) {
+      const confirmarBaixa = window.confirm(
+        `O orçamento de "${targetQuote.clienteNome}" foi marcado como Entregue! Deseja descontar automaticamente as peças deste pedido do seu Estoque de Pronta Entrega?`
+      );
+      if (confirmarBaixa && setProducts) {
+        const novosMovimentos = [];
+        setProducts((prevProducts) =>
+          prevProducts.map((p) => {
+            const itemOrcamento = (targetQuote.itens || []).find(
+              (i) => i.productId === p.id
+            );
+            if (!itemOrcamento) return p;
+            const qtdVendida = Math.max(1, Number(itemOrcamento.quantidade) || 1);
+            const saldoAtual = Math.max(0, Number(p.estoqueAtual) || 0);
+            const novoSaldo = Math.max(0, saldoAtual - qtdVendida);
+            novosMovimentos.push({
+              id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              productId: p.id,
+              produtoNome: p.nome,
+              tipo: 'SAIDA',
+              quantidade: qtdVendida,
+              saldoAnterior: saldoAtual,
+              saldoNovo: novoSaldo,
+              observacao: `Orçamento entregue (${targetQuote.clienteNome})`,
+              data: new Date().toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            });
+            return { ...p, estoqueAtual: novoSaldo };
+          })
+        );
+        if (setStockHistory && novosMovimentos.length > 0) {
+          setStockHistory((prev) => [...novosMovimentos, ...prev.slice(0, 49)]);
+        }
+        setQuotes((prev) =>
+          prev.map((q) =>
+            q.id === id
+              ? { ...q, status: newStatus, baixaEstoqueRealizada: true }
+              : q
+          )
+        );
+        return;
+      }
+    }
+
     setQuotes((prev) =>
       prev.map((q) => (q.id === id ? { ...q, status: newStatus } : q))
     );
@@ -504,7 +561,7 @@ export default function QuoteManager({
                         >
                           {productsWithPrice.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.nome} ({p.tipo}) — {formatCurrency(p.precoUnitario)} un.
+                              {p.nome} ({p.tipo}) — {formatCurrency(p.precoUnitario)} un. [Estoque: {Number(p.estoqueAtual) || 0}]
                             </option>
                           ))}
                         </select>

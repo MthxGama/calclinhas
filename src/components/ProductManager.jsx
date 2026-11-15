@@ -53,6 +53,8 @@ export default function ProductManager({
     valorHora: laborConfig.valorHoraPadrao,
     custoExtra: 0,
     margemLucro: laborConfig.margemLucroPadrao || 0,
+    estoqueAtual: 1,
+    estoqueMinimo: 0,
     observacoes: '',
   });
 
@@ -179,6 +181,8 @@ export default function ProductManager({
       valorHora: Number(form.valorHora) || 0,
       custoExtra: Number(form.custoExtra) || 0,
       margemLucro: Number(form.margemLucro) || 0,
+      estoqueAtual: Math.max(0, Number(form.estoqueAtual) || 0),
+      estoqueMinimo: Math.max(0, Number(form.estoqueMinimo) || 0),
       observacoes: form.observacoes.trim(),
       criadoEm: new Date().toISOString().slice(0, 10),
     };
@@ -210,6 +214,8 @@ export default function ProductManager({
       valorHora: prod.valorHora,
       custoExtra: prod.custoExtra || 0,
       margemLucro: prod.margemLucro || 0,
+      estoqueAtual: prod.estoqueAtual ?? 0,
+      estoqueMinimo: prod.estoqueMinimo ?? 0,
       observacoes: prod.observacoes || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -603,6 +609,23 @@ export default function ProductManager({
                 onChange={(e) => setForm({ ...form, custoExtra: e.target.value })}
               />
             </div>
+
+            <div className="field-group">
+              <label className="field-label">
+                <span>Qtd. em Estoque (Pronta Entrega)</span>
+                <span className="field-hint">Quantas unidades já tem prontas</span>
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                step="1"
+                className="input"
+                placeholder="Ex: 1"
+                value={form.estoqueAtual}
+                onChange={(e) => setForm({ ...form, estoqueAtual: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Módulo de Horas Gastas e Valor da Hora para a Peça */}
@@ -850,6 +873,21 @@ export default function ProductManager({
                         <span className="tag order-tag">{prod.tipo}</span>
                         <span className="tag">
                           <Scale size={12} /> {prod.pesoTotal}g
+                        </span>
+                        <span
+                          className="tag"
+                          style={{
+                            background:
+                              (Number(prod.estoqueAtual) || 0) > 0
+                                ? 'var(--bg-sage-soft)'
+                                : '#FEF3C7',
+                            color:
+                              (Number(prod.estoqueAtual) || 0) > 0
+                                ? 'var(--secondary)'
+                                : '#92400E',
+                          }}
+                        >
+                          Estoque: {Number(prod.estoqueAtual) || 0} un.
                         </span>
                       </div>
 

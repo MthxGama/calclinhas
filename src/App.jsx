@@ -5,12 +5,14 @@ import {
   Sparkles,
   Layers,
   ShoppingBag,
+  Package,
   Clock,
   FileText,
   Trash2,
 } from 'lucide-react';
 import YarnManager from './components/YarnManager';
 import ProductManager from './components/ProductManager';
+import StockManager from './components/StockManager';
 import LaborCalculator from './components/LaborCalculator';
 import QuoteManager from './components/QuoteManager';
 import {
@@ -25,6 +27,7 @@ const STORAGE_KEYS = {
   PRODUCTS: 'calclinhas_products_v2',
   LABOR: 'calclinhas_labor_v2',
   QUOTES: 'calclinhas_quotes_v2',
+  STOCK_HISTORY: 'calclinhas_stock_history_v2',
 };
 
 export default function App() {
@@ -33,6 +36,7 @@ export default function App() {
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [laborConfig, setLaborConfig] = useState(INITIAL_LABOR_CONFIG);
   const [quotes, setQuotes] = useState([]);
+  const [stockHistory, setStockHistory] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Carrega os dados salvos no navegador após montar no cliente (evita erro de hidratação no Next.js)
@@ -53,6 +57,9 @@ export default function App() {
 
       const savedQuotes = localStorage.getItem(STORAGE_KEYS.QUOTES);
       if (savedQuotes) setQuotes(JSON.parse(savedQuotes));
+
+      const savedStockHistory = localStorage.getItem(STORAGE_KEYS.STOCK_HISTORY);
+      if (savedStockHistory) setStockHistory(JSON.parse(savedStockHistory));
     } catch (e) {
       console.error(e);
     } finally {
@@ -96,6 +103,18 @@ export default function App() {
     }
   }, [quotes, isLoaded]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.STOCK_HISTORY,
+        JSON.stringify(stockHistory)
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }, [stockHistory, isLoaded]);
+
   // Indicadores Gerais
   const stats = useMemo(() => {
     const totalYarnsValue = yarns.reduce((acc, y) => acc + (Number(y.valor) || 0), 0);
@@ -111,10 +130,16 @@ export default function App() {
       return acc + calc.valorFinalSugerido;
     }, 0);
 
+    const totalStockUnits = products.reduce(
+      (acc, p) => acc + Math.max(0, Number(p.estoqueAtual) || 0),
+      0
+    );
+
     return {
       totalYarnsValue,
       totalYarnsWeight,
       totalCatalogSaleValue,
+      totalStockUnits,
     };
   }, [yarns, products, laborConfig.valorHoraPadrao]);
 
@@ -127,11 +152,13 @@ export default function App() {
       setYarns([]);
       setProducts([]);
       setQuotes([]);
+      setStockHistory([]);
       setLaborConfig(INITIAL_LABOR_CONFIG);
       localStorage.removeItem(STORAGE_KEYS.YARNS);
       localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
       localStorage.removeItem(STORAGE_KEYS.LABOR);
       localStorage.removeItem(STORAGE_KEYS.QUOTES);
+      localStorage.removeItem(STORAGE_KEYS.STOCK_HISTORY);
     }
   }
 
@@ -147,7 +174,7 @@ export default function App() {
             <div>
               <div className="brand-title">Ateliê CalcLinhas</div>
               <div className="brand-subtitle">
-                Gestão de Linhas, Peças, Horas e Orçamentos para Clientes
+                Gestão de Linhas, Peças, Estoque, Horas e Orçamentos
               </div>
             </div>
           </div>
@@ -158,8 +185,8 @@ export default function App() {
               className={`nav-tab ${activeTab === 'yarns' ? 'active' : ''}`}
               onClick={() => setActiveTab('yarns')}
             >
-              <Layers size={17} />
-              1. Rolos de Linha
+              <Layers size={16} />
+              1. Linhas
               <span className="badge-count">{yarns.length}</span>
             </button>
 
@@ -168,9 +195,19 @@ export default function App() {
               className={`nav-tab ${activeTab === 'products' ? 'active' : ''}`}
               onClick={() => setActiveTab('products')}
             >
-              <ShoppingBag size={17} />
-              2. Peças & Preço
+              <ShoppingBag size={16} />
+              2. Peças
               <span className="badge-count">{products.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-tab ${activeTab === 'stock' ? 'active' : ''}`}
+              onClick={() => setActiveTab('stock')}
+            >
+              <Package size={16} />
+              3. Estoque
+              <span className="badge-count">{stats.totalStockUnits}</span>
             </button>
 
             <button
@@ -178,8 +215,8 @@ export default function App() {
               className={`nav-tab ${activeTab === 'labor' ? 'active' : ''}`}
               onClick={() => setActiveTab('labor')}
             >
-              <Clock size={17} />
-              3. Valor da Hora
+              <Clock size={16} />
+              4. Valor da Hora
             </button>
 
             <button
@@ -187,8 +224,8 @@ export default function App() {
               className={`nav-tab ${activeTab === 'quotes' ? 'active' : ''}`}
               onClick={() => setActiveTab('quotes')}
             >
-              <FileText size={17} />
-              4. Orçamentos
+              <FileText size={16} />
+              5. Orçamentos
               <span className="badge-count">{quotes.length}</span>
             </button>
           </nav>
@@ -256,18 +293,16 @@ export default function App() {
 
           <div
             className="kpi-card"
-            onClick={() => setActiveTab('labor')}
+            onClick={() => setActiveTab('stock')}
             style={{ cursor: 'pointer' }}
           >
             <div className="kpi-icon sage">
-              <Clock size={20} />
+              <Package size={20} />
             </div>
             <div>
-              <div className="kpi-label">Sua Hora</div>
-              <div className="kpi-value">
-                {formatCurrency(laborConfig.valorHoraPadrao)}/h
-              </div>
-              <div className="kpi-sub">Mão de obra</div>
+              <div className="kpi-label">Em Estoque</div>
+              <div className="kpi-value">{stats.totalStockUnits} un.</div>
+              <div className="kpi-sub">Pronta entrega</div>
             </div>
           </div>
 
@@ -307,6 +342,18 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'stock' && (
+          <StockManager
+            products={products}
+            setProducts={setProducts}
+            stockHistory={stockHistory}
+            setStockHistory={setStockHistory}
+            yarns={yarns}
+            laborConfig={laborConfig}
+            onNavigateToProducts={() => setActiveTab('products')}
+          />
+        )}
+
         {activeTab === 'labor' && (
           <LaborCalculator
             laborConfig={laborConfig}
@@ -322,6 +369,8 @@ export default function App() {
             quotes={quotes}
             setQuotes={setQuotes}
             products={products}
+            setProducts={setProducts}
+            setStockHistory={setStockHistory}
             yarns={yarns}
             laborConfig={laborConfig}
             onNavigateToProducts={() => setActiveTab('products')}
@@ -339,8 +388,8 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <Layers size={19} />
-          <span>1. Linhas</span>
+          <Layers size={18} />
+          <span>Linhas</span>
           {yarns.length > 0 && (
             <span className="mobile-nav-badge">{yarns.length}</span>
           )}
@@ -354,10 +403,25 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <ShoppingBag size={19} />
-          <span>2. Peças</span>
+          <ShoppingBag size={18} />
+          <span>Peças</span>
           {products.length > 0 && (
             <span className="mobile-nav-badge">{products.length}</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === 'stock' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('stock');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Package size={18} />
+          <span>Estoque</span>
+          {stats.totalStockUnits > 0 && (
+            <span className="mobile-nav-badge">{stats.totalStockUnits}</span>
           )}
         </button>
 
@@ -369,8 +433,8 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <Clock size={19} />
-          <span>3. Hora</span>
+          <Clock size={18} />
+          <span>Hora</span>
         </button>
 
         <button
@@ -381,8 +445,8 @@ export default function App() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <FileText size={19} />
-          <span>4. Orçamentos</span>
+          <FileText size={18} />
+          <span>Orçar</span>
           {quotes.length > 0 && (
             <span className="mobile-nav-badge">{quotes.length}</span>
           )}
